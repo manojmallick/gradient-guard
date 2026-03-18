@@ -37,7 +37,7 @@ services:
       repo: manojmallick/gradient-guard
       branch: main
       deploy_on_push: true
-    build_command: npm install && npm run build
+    build_command: npm install --include=dev && npm run build
     run_command: npm start
     environment_slug: node-js
     instance_count: 1
@@ -108,7 +108,7 @@ services:
       repo: manojmallick/gradient-guard
       branch: main
       deploy_on_push: true
-    build_command: npm install && npm run build
+    build_command: npm install --include=dev && npm run build
     run_command: node dist/workers/sentinel-cron.js
     environment_slug: node-js
     instance_count: 1
