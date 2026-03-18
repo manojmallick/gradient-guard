@@ -10,7 +10,7 @@ services:
       branch: main
       deploy_on_push: true
     build_command: npm install && npm run build
-    run_command: npm start
+    run_command: node .next/standalone/server.js
     environment_slug: node-js
     instance_count: 1
     instance_size_slug: apps-s-1vcpu-0.5gb
@@ -162,3 +162,5 @@ jobs:
     envs:
       - key: DATABASE_URL
         value: ${gradient-guard-db.DATABASE_URL}
+      - key: NODE_TLS_REJECT_UNAUTHORIZED
+        value: "0"

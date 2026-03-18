@@ -5,6 +5,9 @@ export default {
   out: "./src/db/migrations",
   dialect: "postgresql",
   dbCredentials: {
-    url: process.env.DATABASE_URL ?? "postgresql://manojmallick@localhost:5432/gradientguard",
+    url: process.env.DATABASE_URL ?? "postgresql://localhost:5432/gradientguard",
+    ssl: process.env.DATABASE_URL?.includes("ondigitalocean.com")
+      ? { rejectUnauthorized: false }
+      : false,
   },
 } satisfies Config;
