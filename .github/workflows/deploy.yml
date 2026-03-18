@@ -233,8 +233,9 @@ jobs:
         id: livecheck
         run: |
           HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
-            https://gradient-guard-api.ondigitalocean.app/health || echo "000")
-          if [[ "$HTTP" == "000" || "$HTTP" == "404" || "$HTTP" == "502" || "$HTTP" == "503" ]]; then
+            https://gradient-guard-api.ondigitalocean.app/health 2>/dev/null) || HTTP="000"
+          echo "HTTP status: $HTTP"
+          if [[ "$HTTP" =~ ^(000|404|502|503|000000)$ ]] || [ -z "$HTTP" ]; then
             echo "⚠️  App not live yet (HTTP $HTTP) — skipping health checks."
             echo "skip=true" >> "$GITHUB_OUTPUT"
           else
