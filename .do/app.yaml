@@ -10,7 +10,7 @@ services:
       branch: main
       deploy_on_push: true
     build_command: npm install && npm run build
-    run_command: npm start
+    run_command: npm run start
     environment_slug: node-js
     instance_count: 1
     instance_size_slug: apps-s-1vcpu-0.5gb
@@ -21,6 +21,10 @@ services:
         value: ${api.PUBLIC_URL}
       - key: NEXT_PUBLIC_APP_URL
         value: ${APP_URL}
+           - key: NODE_ENV
+             value: production
+           - key: NODE_OPTIONS
+             value: --max-old-space-size=512
       - key: GRADIENT_AGENT_KEY_COUNSEL
         scope: RUN_TIME
         type: SECRET
