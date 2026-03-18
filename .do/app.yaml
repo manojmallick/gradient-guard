@@ -25,6 +25,8 @@ services:
              value: production
            - key: NODE_OPTIONS
              value: --max-old-space-size=512
+           - key: PORT
+             value: "8080"
       - key: GRADIENT_AGENT_KEY_COUNSEL
         scope: RUN_TIME
         type: SECRET
