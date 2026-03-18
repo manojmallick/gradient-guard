@@ -15,7 +15,7 @@ async function triggerSentinel(): Promise<void> {
         messages: [{ role: "user", content: "run sentinel check" }],
       }),
     });
-    const data = await resp.json();
+    const data = await resp.json() as { status?: string };
     console.log(
       `[sentinel-cron] ${new Date().toISOString()} →`,
       data.status ?? "unknown"

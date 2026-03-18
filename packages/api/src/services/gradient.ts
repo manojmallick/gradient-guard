@@ -13,6 +13,7 @@ export async function streamCounselResponse(
 ): Promise<void> {
   const stream = await counselAgent.chat.completions.create({
     messages: [{ role: "user", content: question }],
+    model: "llama3.3-70b-instruct",
     stream: true,
   });
 
