@@ -7,7 +7,7 @@
 [![Deploy to DO](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/manojmallick/gradient-guard/tree/main)
 
 **Live Demo:** https://gradient-guard.ondigitalocean.app  
-**Builder:** Manoj Mallick · Amsterdam · 15 years FinTech (ING Netherlands, ABN AMRO)
+**Builder:** Manoj Mallick · Amsterdam · 15 years FinTech (Major Dutch Banks)
 
 ---
 
@@ -155,8 +155,8 @@ See [CLAUDE.md](CLAUDE.md) for full technical specification.
 
 ## Builder
 
-**Manoj Mallick** — Solution Architect, HCL Technologies Netherlands  
-15+ years FinTech experience at ING Netherlands and ABN AMRO  
+**Manoj Mallick** — Solution Architect
+15+ years FinTech experience at Major Dutch Banks 
 Amsterdam, Netherlands
 
 _This project does not constitute legal advice._

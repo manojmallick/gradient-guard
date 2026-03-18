@@ -64,6 +64,7 @@ coverage/
 # Project planning / internal docs — not for public repo
 CLAUDE.md
 completion.md
+DEPLOY.md
 
 # Terraform — never commit state or real tfvars
 terraform/.terraform/

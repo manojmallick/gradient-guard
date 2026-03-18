@@ -102,7 +102,23 @@ jobs:
           terraform_wrapper: false
 
       # Spaces backend credentials
+      - name: Check prerequisites
+        id: prereqs
+        run: |
+          if [ -z "$DO_SPACES_KEY" ] || [ -z "$DO_SPACES_SECRET" ] || [ -z "$DO_TOKEN" ]; then
+            echo "⚠️  Skipping Terraform — DO_SPACES_KEY / DO_SPACES_SECRET / DIGITALOCEAN_API_TOKEN secrets not configured yet."
+            echo "Set these in GitHub → Settings → Secrets and variables → Actions, then re-run."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          DO_SPACES_KEY: ${{ secrets.DO_SPACES_KEY }}
+          DO_SPACES_SECRET: ${{ secrets.DO_SPACES_SECRET }}
+          DO_TOKEN: ${{ secrets.DIGITALOCEAN_API_TOKEN }}
+
       - name: terraform init
+        if: steps.prereqs.outputs.skip != 'true'
         run: |
           terraform init \
             -backend-config="access_key=${{ secrets.DO_SPACES_KEY }}" \
@@ -110,6 +126,7 @@ jobs:
 
       - name: terraform plan
         id: plan
+        if: steps.prereqs.outputs.skip != 'true'
         run: |
           terraform plan -detailed-exitcode -out=tfplan \
             -var="do_token=${{ secrets.DIGITALOCEAN_API_TOKEN }}" \
@@ -132,7 +149,7 @@ jobs:
 
       - name: Post plan summary to PR/commit
         uses: actions/github-script@v7
-        if: always()
+        if: always() && steps.prereqs.outputs.skip != 'true'
         with:
           script: |
             const exitCode = '${{ steps.plan.outputs.exit_code }}';
@@ -145,7 +162,7 @@ jobs:
 
       - name: terraform apply
         id: apply
-        if: steps.plan.outputs.exit_code == '2'
+        if: steps.prereqs.outputs.skip != 'true' && steps.plan.outputs.exit_code == '2'
         run: |
           terraform apply -auto-approve tfplan
           echo "app_live_url=$(terraform output -raw app_live_url 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
