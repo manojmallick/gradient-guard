@@ -12,7 +12,7 @@ terraform {
   # Bucket must exist before first `terraform init` — see DEPLOY.md Step 2
   backend "s3" {
     endpoints = {
-      s3 = "https://ams3.digitaloceanspaces.com"  # Amsterdam
+      s3 = "https://ams3.digitaloceanspaces.com" # Amsterdam
     }
     bucket                      = "gradient-guard-tf-state"
     key                         = "terraform.tfstate"

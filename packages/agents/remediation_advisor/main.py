@@ -157,7 +157,6 @@ async def notify_slack(state: RemediationState) -> RemediationState:
     webhook = os.environ.get("SLACK_WEBHOOK_URL")
     if not webhook:
         return state
-    plan = state.get("remediation_plan", {})
     try:
         primary_cause = json.loads(state.get("root_cause", "{}")).get(
             "primary_cause", "Unknown"
