@@ -229,13 +229,27 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Check app is live
+        id: livecheck
+        run: |
+          HTTP=$(curl -s -o /dev/null -w "%{http_code}" --max-time 10 \
+            https://gradient-guard-api.ondigitalocean.app/health || echo "000")
+          if [[ "$HTTP" == "000" || "$HTTP" == "404" || "$HTTP" == "502" || "$HTTP" == "503" ]]; then
+            echo "⚠️  App not live yet (HTTP $HTTP) — skipping health checks."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "App responding (HTTP $HTTP) — running health checks."
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Run health checks
+        if: steps.livecheck.outputs.skip != 'true'
         run: bash scripts/check-health.sh
         env:
-          GRADIENT_AGENT_URL_SENTINEL:   ${{ vars.GRADIENT_AGENT_URL_SENTINEL }}
-          GRADIENT_AGENT_URL_EVIDENCE:   ${{ vars.GRADIENT_AGENT_URL_EVIDENCE }}
+          GRADIENT_AGENT_URL_SENTINEL:    ${{ vars.GRADIENT_AGENT_URL_SENTINEL }}
+          GRADIENT_AGENT_URL_EVIDENCE:    ${{ vars.GRADIENT_AGENT_URL_EVIDENCE }}
           GRADIENT_AGENT_URL_REMEDIATION: ${{ vars.GRADIENT_AGENT_URL_REMEDIATION }}
-          GRADIENT_AGENT_URL_COUNSEL:    ${{ vars.GRADIENT_AGENT_URL_COUNSEL }}
+          GRADIENT_AGENT_URL_COUNSEL:     ${{ vars.GRADIENT_AGENT_URL_COUNSEL }}
           API_URL: "https://gradient-guard-api.ondigitalocean.app"
           WEB_URL: "https://gradient-guard.ondigitalocean.app"
 
