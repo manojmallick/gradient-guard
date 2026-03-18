@@ -41,12 +41,14 @@ variable "do_spaces_key" {
   description = "DO Spaces access key ID"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 variable "do_spaces_secret" {
   description = "DO Spaces secret access key"
   type        = string
   sensitive   = true
+  default     = ""
 }
 
 # ── Gradient AI ──────────────────────────────────────────────────────────────

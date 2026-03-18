@@ -131,8 +131,8 @@ jobs:
         run: |
           terraform plan -detailed-exitcode -out=tfplan \
             -var="do_token=${{ secrets.DIGITALOCEAN_API_TOKEN }}" \
-            -var="do_spaces_key=unused" \
-            -var="do_spaces_secret=unused" \
+            -var="do_spaces_key=${{ secrets.DO_SPACES_KEY }}" \
+            -var="do_spaces_secret=${{ secrets.DO_SPACES_SECRET }}" \
             -var="gradient_model_access_key=${{ secrets.GRADIENT_MODEL_ACCESS_KEY }}" \
             -var="gradient_agent_key_sentinel=${{ secrets.GRADIENT_AGENT_KEY_SENTINEL }}" \
             -var="gradient_agent_url_sentinel=${{ vars.GRADIENT_AGENT_URL_SENTINEL }}" \
