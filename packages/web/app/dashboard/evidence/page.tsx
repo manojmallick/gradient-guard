@@ -1,4 +1,4 @@
-import EvidencePanel from "@/components/EvidencePanel";
+import EvidencePanel from "../../../components/EvidencePanel";
 import Link from "next/link";
 
 export const metadata = { title: "Evidence — GradientGuard" };

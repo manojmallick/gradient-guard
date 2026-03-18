@@ -1,4 +1,4 @@
-import CounselChat from "@/components/CounselChat";
+import CounselChat from "../../../components/CounselChat";
 import Link from "next/link";
 
 export const metadata = { title: "Compliance Counsel — GradientGuard" };

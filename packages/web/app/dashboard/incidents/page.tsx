@@ -1,4 +1,4 @@
-import IncidentFeed from "@/components/IncidentFeed";
+import IncidentFeed from "../../../components/IncidentFeed";
 import Link from "next/link";
 
 export const metadata = { title: "Incidents — GradientGuard" };

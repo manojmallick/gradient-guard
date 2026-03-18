@@ -1,9 +1,9 @@
 import Link from "next/link";
-import ComplianceGauge from "@/components/ComplianceGauge";
-import IncidentFeed from "@/components/IncidentFeed";
-import DoProductBadge from "@/components/DoProductBadge";
-import SimulateButton from "@/components/SimulateButton";
-import RoiCalculator from "@/components/RoiCalculator";
+import ComplianceGauge from "../../components/ComplianceGauge";
+import IncidentFeed from "../../components/IncidentFeed";
+import DoProductBadge from "../../components/DoProductBadge";
+import SimulateButton from "../../components/SimulateButton";
+import RoiCalculator from "../../components/RoiCalculator";
 
 export const dynamic = "force-dynamic";
 
