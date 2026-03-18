@@ -4,6 +4,10 @@ import { env } from "../lib/env";
 const INTERVAL_MS = 60_000;
 
 async function triggerSentinel(): Promise<void> {
+  if (!env.GRADIENT_AGENT_URL_SENTINEL || !env.GRADIENT_AGENT_KEY_SENTINEL) {
+    console.log("[sentinel-cron] Agent URL not configured — skipping");
+    return;
+  }
   try {
     const resp = await fetch(`${env.GRADIENT_AGENT_URL_SENTINEL}/run`, {
       method: "POST",
