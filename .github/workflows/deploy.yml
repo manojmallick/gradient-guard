@@ -176,12 +176,26 @@ jobs:
     if: always() && needs.terraform.result != 'failure'
 
     steps:
+      - name: Check prerequisites
+        id: prereqs
+        run: |
+          if [ -z "$DO_TOKEN" ]; then
+            echo "⚠️  DIGITALOCEAN_API_TOKEN not configured — skipping App Platform wait."
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          DO_TOKEN: ${{ secrets.DIGITALOCEAN_API_TOKEN }}
+
       - name: Install doctl
+        if: steps.prereqs.outputs.skip != 'true'
         uses: digitalocean/action-doctl@v2
         with:
           token: ${{ secrets.DIGITALOCEAN_API_TOKEN }}
 
       - name: Wait for active deployment
+        if: steps.prereqs.outputs.skip != 'true'
         run: |
           echo "Waiting for App Platform to finish deploying..."
           APP_ID=$(doctl apps list --format ID,Spec.Name --no-header | grep gradient-guard | awk '{print $1}' | head -1)
