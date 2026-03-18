@@ -36,19 +36,12 @@ variable "db_size" {
   default     = "db-s-1vcpu-1gb"
 }
 
-# ── DO Spaces credentials ────────────────────────────────────────────────────
-variable "do_spaces_key" {
-  description = "DO Spaces access key ID"
+# ── App Platform App ID ──────────────────────────────────────────────────────
+# Set once after first deploy: doctl apps list | grep gradient-guard
+variable "app_id" {
+  description = "App Platform app ID (read from DO console or doctl apps list)"
   type        = string
-  sensitive   = true
-  default     = ""
-}
-
-variable "do_spaces_secret" {
-  description = "DO Spaces secret access key"
-  type        = string
-  sensitive   = true
-  default     = ""
+  default     = "3b3832cc-292d-4b6d-881c-ffb902be5c98"
 }
 
 # ── Gradient AI ──────────────────────────────────────────────────────────────

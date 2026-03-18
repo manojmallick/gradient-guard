@@ -3,10 +3,13 @@
 # NEVER commit terraform.tfvars — it is in .gitignore.
 
 # ── Required ────────────────────────────────────────────────────────────────
+# Only DIGITALOCEAN_API_TOKEN is needed. No Spaces credentials required here;
+# Spaces are pre-created via `doctl spaces create` and managed externally.
 do_token                  = "dop_v1_xxxx"
-do_spaces_key             = "xxxx"
-do_spaces_secret          = "xxxx"
 gradient_model_access_key = "xxxx"
+
+# App Platform app ID — update after first deploy
+app_id = "REPLACE_WITH_YOUR_APP_ID"  # doctl apps list | grep gradient-guard
 
 # ── Optional — set AFTER `gradient agent deploy` ─────────────────────────────
 gradient_agent_key_sentinel    = ""

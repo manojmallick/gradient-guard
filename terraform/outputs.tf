@@ -1,31 +1,29 @@
+# App Platform is the source of truth for the app. Terraform reads it read-only.
 output "app_live_url" {
   description = "Public URL of the GradientGuard web dashboard"
-  value       = "https://${digitalocean_app.gradient_guard.live_url}"
+  value       = data.digitalocean_app.gradient_guard.live_url
 }
 
-output "api_url" {
-  description = "Internal API service URL"
-  value       = digitalocean_app.gradient_guard.live_url
+output "app_id" {
+  description = "App Platform app ID"
+  value       = data.digitalocean_app.gradient_guard.id
 }
 
-output "db_host" {
-  description = "PostgreSQL cluster host (for reference)"
-  value       = digitalocean_database_cluster.postgres.host
-  sensitive   = false
-}
-
+# DB is managed by App Platform as a component — DATABASE_URL is injected
+# automatically via ${gradient-guard-db.DATABASE_URL} in .do/app.yaml.
+# It is not available here; use the App Platform console to retrieve it.
 output "db_connection_uri" {
-  description = "Full DATABASE_URL (sensitive)"
-  value       = digitalocean_database_cluster.postgres.uri
-  sensitive   = true
+  description = "Managed by App Platform. Retrieve from the DO console or app env vars."
+  value       = "see-app-platform-env"
+  sensitive   = false
 }
 
 output "evidence_bucket_name" {
   description = "DO Spaces bucket name for evidence PDFs"
-  value       = digitalocean_spaces_bucket.evidence.name
+  value       = "gradient-guard-evidence"
 }
 
 output "evidence_cdn_endpoint" {
   description = "CDN endpoint for evidence bucket"
-  value       = "https://${digitalocean_spaces_bucket.evidence.name}.${var.do_region}.cdn.digitaloceanspaces.com"
+  value       = "https://gradient-guard-evidence.${var.do_region}.cdn.digitaloceanspaces.com"
 }
