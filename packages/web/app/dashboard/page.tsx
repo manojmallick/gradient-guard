@@ -13,7 +13,8 @@ async function getComplianceScore() {
       `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001"}/api/compliance/score`,
       { cache: "no-store" }
     );
-    return res.json();
+    if (!res.ok) return { score: 0, breakdown: {}, open_incidents: 0 };
+    return await res.json();
   } catch {
     return { score: 0, breakdown: {}, open_incidents: 0 };
   }
