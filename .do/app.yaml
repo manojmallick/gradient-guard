@@ -115,26 +115,6 @@ services:
     envs:
       - key: DATABASE_URL
         value: ${gradient-guard-db.DATABASE_URL}
-      - key: GRADIENT_AGENT_KEY_SENTINEL
-        scope: RUN_TIME
-        type: SECRET
-      - key: GRADIENT_AGENT_URL_SENTINEL
-        scope: RUN_TIME
-        type: SECRET
-      - key: GRADIENT_AGENT_KEY_EVIDENCE
-        scope: RUN_TIME
-        type: SECRET
-      - key: GRADIENT_AGENT_URL_EVIDENCE
-        scope: RUN_TIME
-        type: SECRET
-      - key: GRADIENT_AGENT_KEY_REMEDIATION
-        scope: RUN_TIME
-        type: SECRET
-      - key: GRADIENT_AGENT_URL_REMEDIATION
-        scope: RUN_TIME
-        type: SECRET
-      - key: DATABASE_URL
-        value: ${gradient-guard-db.DATABASE_URL}
       - key: NODE_ENV
         value: production
 
@@ -158,7 +138,7 @@ jobs:
     instance_count: 1
     instance_size_slug: apps-s-1vcpu-0.5gb
     build_command: npm install
-    run_command: npx drizzle-kit push
+    run_command: node -e "const{Pool}=require('pg');const p=new Pool({connectionString:process.env.DATABASE_URL,ssl:{rejectUnauthorized:false}});p.query('GRANT ALL ON SCHEMA public TO CURRENT_USER').then(()=>p.end()).catch(()=>p.end())" && npx drizzle-kit push
     envs:
       - key: DATABASE_URL
         value: ${gradient-guard-db.DATABASE_URL}
