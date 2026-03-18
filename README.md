@@ -147,9 +147,13 @@ _Cost estimates based on Deloitte 2024 DORA Compliance Cost Study_
 
 ---
 
-## Project Structure
+## Architecture & Technical Docs
 
-See [CLAUDE.md](CLAUDE.md) for full technical specification.
+| Document | Description |
+|----------|-------------|
+| [ARCHITECTURE.md](ARCHITECTURE.md) | Full technical architecture — agent LangGraph graphs, A2A data flows, API reference, database schema, infrastructure breakdown |
+| [DEPLOY.md](DEPLOY.md) | Step-by-step deployment guide — Terraform, Gradient ADK, GitHub Actions CI/CD |
+| [CLAUDE.md](CLAUDE.md) | Complete technical specification and implementation reference |
 
 ---
 
