@@ -119,6 +119,32 @@ cd packages/api && npm run dev     # http://localhost:3001
 cd packages/web && npm run dev     # http://localhost:3000
 ```
 
+### One-Command Local Demo (recommended)
+
+If you already have another app on ports `3000/3001`, run GradientGuard on
+dedicated demo ports from the repo root:
+
+```bash
+# from gradient-guard/
+npm run db:push
+npm run dev
+```
+
+This starts:
+- Web: `http://localhost:3100`
+- API: `http://localhost:3101`
+
+Optional smoke check in a second terminal:
+
+```bash
+npm run demo:smoke
+```
+
+Notes:
+- Root `dev` now runs both API and web together.
+- If Compliance Counsel agent keys/URL are not configured, chat falls back to a
+    local demo response so the UI still streams output during presentations.
+
 ---
 
 ## DORA Compliance Coverage
