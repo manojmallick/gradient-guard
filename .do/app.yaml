@@ -50,8 +50,7 @@ services:
       - key: API_PORT
         value: "8080"
       - key: DATABASE_URL
-        scope: RUN_TIME
-        type: SECRET
+        value: ${gradient-guard-db.DATABASE_URL}
       - key: DIGITALOCEAN_API_TOKEN
         scope: RUN_TIME
         type: SECRET
@@ -115,8 +114,7 @@ services:
     instance_size_slug: apps-s-1vcpu-0.5gb
     envs:
       - key: DATABASE_URL
-        scope: RUN_TIME
-        type: SECRET
+        value: ${gradient-guard-db.DATABASE_URL}
       - key: GRADIENT_AGENT_KEY_SENTINEL
         scope: RUN_TIME
         type: SECRET
@@ -135,6 +133,8 @@ services:
       - key: GRADIENT_AGENT_URL_REMEDIATION
         scope: RUN_TIME
         type: SECRET
+      - key: DATABASE_URL
+        value: ${gradient-guard-db.DATABASE_URL}
       - key: NODE_ENV
         value: production
 
@@ -161,5 +161,4 @@ jobs:
     run_command: npx drizzle-kit push
     envs:
       - key: DATABASE_URL
-        scope: RUN_TIME
-        type: SECRET
+        value: ${gradient-guard-db.DATABASE_URL}
