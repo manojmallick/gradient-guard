@@ -1,0 +1,30 @@
+# terraform/terraform.tfvars.example
+# Copy to terraform.tfvars and fill in real values.
+# NEVER commit terraform.tfvars — it is in .gitignore.
+
+# ── Required ────────────────────────────────────────────────────────────────
+do_token                  = "dop_v1_xxxx"
+do_spaces_key             = "xxxx"
+do_spaces_secret          = "xxxx"
+gradient_model_access_key = "xxxx"
+
+# ── Optional — set AFTER `gradient agent deploy` ─────────────────────────────
+gradient_agent_key_sentinel    = ""
+gradient_agent_url_sentinel    = "https://dora-sentinel.agents.do-ai.run"
+gradient_agent_key_evidence    = ""
+gradient_agent_url_evidence    = "https://evidence-forge.agents.do-ai.run"
+gradient_agent_key_remediation = ""
+gradient_agent_url_remediation = "https://remediation-advisor.agents.do-ai.run"
+gradient_agent_key_counsel     = ""
+gradient_agent_url_counsel     = "https://compliance-counsel.agents.do-ai.run"
+
+# ── Optional integrations ─────────────────────────────────────────────────────
+slack_webhook_url = ""
+
+# ── Region — Amsterdam (EU data residency, required for DORA compliance) ──────
+do_region = "ams3"  # Amsterdam · closest to EU financial institutions
+
+# ── Overrides ─────────────────────────────────────────────────────────────────
+# github_repo   = "manojmallick/gradient-guard"
+# github_branch = "main"
+# db_size       = "db-s-1vcpu-1gb"

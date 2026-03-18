@@ -1,0 +1,18 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --do-blue: #0069ff;
+  --do-dark: #0c0c30;
+  --do-cyan: #00c8ff;
+}
+
+html {
+  color-scheme: dark;
+}
+
+body {
+  background-color: #080820;
+  color: #e2e8f0;
+}

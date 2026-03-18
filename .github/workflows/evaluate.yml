@@ -1,0 +1,81 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Agent Evaluate — runs weekly + on manual trigger
+# Runs `gradient agent evaluate` on ComplianceCounsel + DORASentinel
+# Posts evaluation results as a GitHub job summary
+# ─────────────────────────────────────────────────────────────────────────────
+name: Agent Evaluate
+
+on:
+  schedule:
+    - cron: "0 6 * * 1" # every Monday 06:00 UTC
+  workflow_dispatch:
+
+jobs:
+  evaluate:
+    name: Run Agent Evaluations
+    runs-on: ubuntu-latest
+    environment: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install Gradient ADK
+        run: pip install gradient-adk
+
+      - name: Configure Gradient credentials
+        run: |
+          mkdir -p ~/.gradient
+          cat > ~/.gradient/config.json <<EOF
+          {
+            "access_token": "${{ secrets.DIGITALOCEAN_API_TOKEN }}",
+            "model_access_key": "${{ secrets.GRADIENT_MODEL_ACCESS_KEY }}"
+          }
+          EOF
+
+      - name: Evaluate ComplianceCounsel
+        id: eval_counsel
+        run: |
+          cd packages/agents/compliance_counsel
+          gradient agent evaluate \
+            --test-case-name "DORA Q&A Evaluation — $(date +%Y-%m-%d)" \
+            --dataset-file eval_dataset.csv \
+            --categories correctness,context_quality \
+            --output-format json > /tmp/eval_counsel.json 2>&1 || true
+          cat /tmp/eval_counsel.json
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_API_TOKEN }}
+
+      - name: Evaluate DORASentinel
+        id: eval_sentinel
+        run: |
+          cd packages/agents/dora_sentinel
+          gradient agent evaluate \
+            --test-case-name "Incident Detection Evaluation — $(date +%Y-%m-%d)" \
+            --dataset-file eval_dataset.csv \
+            --categories correctness \
+            --output-format json > /tmp/eval_sentinel.json 2>&1 || true
+          cat /tmp/eval_sentinel.json
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_API_TOKEN }}
+
+      - name: Post evaluation summary
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let counselResult = '(no output)';
+            let sentinelResult = '(no output)';
+            try { counselResult  = fs.readFileSync('/tmp/eval_counsel.json',  'utf8'); } catch {}
+            try { sentinelResult = fs.readFileSync('/tmp/eval_sentinel.json', 'utf8'); } catch {}
+            await core.summary
+              .addHeading('GradientGuard Agent Evaluation Results')
+              .addHeading('ComplianceCounsel', 2)
+              .addCodeBlock(counselResult, 'json')
+              .addHeading('DORASentinel', 2)
+              .addCodeBlock(sentinelResult, 'json')
+              .write();

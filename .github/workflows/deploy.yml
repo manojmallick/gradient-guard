@@ -1,0 +1,236 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# Deploy — runs on push to main after CI passes
+# Stage 1: Deploy Gradient ADK agents (Python)
+# Stage 2: Apply Terraform (infra: Spaces, DB, App Platform app spec)
+# Stage 3: App Platform deploys automatically via deploy_on_push: true
+# Stage 4: Run DB migrations via drizzle-kit push
+# Stage 5: Health check all endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      deploy_agents:
+        description: "Re-deploy Gradient ADK agents"
+        required: false
+        default: "false"
+        type: boolean
+      run_terraform:
+        description: "Run terraform apply (infra changes)"
+        required: false
+        default: "true"
+        type: boolean
+
+# Only one deployment at a time
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  # ── 1. Deploy Gradient Agents ────────────────────────────────────────────────
+  deploy-agents:
+    name: "1 · Deploy Gradient ADK Agents"
+    runs-on: ubuntu-latest
+    # Only run on workflow_dispatch with deploy_agents=true, or first deploy
+    if: |
+      github.event_name == 'workflow_dispatch' && inputs.deploy_agents == 'true' ||
+      github.event_name == 'push'
+    outputs:
+      agents_deployed: ${{ steps.deploy.outputs.deployed }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Gradient ADK CLI
+        run: pip install gradient-adk
+
+      - name: Configure Gradient credentials
+        run: |
+          mkdir -p ~/.gradient
+          cat > ~/.gradient/config.json <<EOF
+          {
+            "access_token": "${{ secrets.DIGITALOCEAN_API_TOKEN }}",
+            "model_access_key": "${{ secrets.GRADIENT_MODEL_ACCESS_KEY }}"
+          }
+          EOF
+
+      - name: Deploy agents
+        id: deploy
+        run: |
+          AGENTS=(dora_sentinel evidence_forge remediation_advisor compliance_counsel)
+          for agent in "${AGENTS[@]}"; do
+            echo "::group::Deploying $agent"
+            cd packages/agents/$agent
+            gradient agent deploy --yes 2>&1 || echo "Warning: $agent deploy may already be current"
+            cd ../../..
+            echo "::endgroup::"
+          done
+          echo "deployed=true" >> "$GITHUB_OUTPUT"
+        env:
+          DIGITALOCEAN_ACCESS_TOKEN: ${{ secrets.DIGITALOCEAN_API_TOKEN }}
+
+  # ── 2. Terraform — provision / update infrastructure ────────────────────────
+  terraform:
+    name: "2 · Terraform Apply"
+    runs-on: ubuntu-latest
+    needs: [deploy-agents]
+    if: always() && (github.event_name == 'push' || inputs.run_terraform == 'true')
+    environment: production
+    defaults:
+      run:
+        working-directory: terraform
+    outputs:
+      app_url: ${{ steps.apply.outputs.app_live_url }}
+      db_url:  ${{ steps.apply.outputs.db_connection_uri }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.9.x"
+          terraform_wrapper: false
+
+      # Spaces backend credentials
+      - name: terraform init
+        run: |
+          terraform init \
+            -backend-config="access_key=${{ secrets.DO_SPACES_KEY }}" \
+            -backend-config="secret_key=${{ secrets.DO_SPACES_SECRET }}"
+
+      - name: terraform plan
+        id: plan
+        run: |
+          terraform plan -detailed-exitcode -out=tfplan \
+            -var="do_token=${{ secrets.DIGITALOCEAN_API_TOKEN }}" \
+            -var="do_spaces_key=${{ secrets.DO_SPACES_KEY }}" \
+            -var="do_spaces_secret=${{ secrets.DO_SPACES_SECRET }}" \
+            -var="gradient_model_access_key=${{ secrets.GRADIENT_MODEL_ACCESS_KEY }}" \
+            -var="gradient_agent_key_sentinel=${{ secrets.GRADIENT_AGENT_KEY_SENTINEL }}" \
+            -var="gradient_agent_url_sentinel=${{ vars.GRADIENT_AGENT_URL_SENTINEL }}" \
+            -var="gradient_agent_key_evidence=${{ secrets.GRADIENT_AGENT_KEY_EVIDENCE }}" \
+            -var="gradient_agent_url_evidence=${{ vars.GRADIENT_AGENT_URL_EVIDENCE }}" \
+            -var="gradient_agent_key_remediation=${{ secrets.GRADIENT_AGENT_KEY_REMEDIATION }}" \
+            -var="gradient_agent_url_remediation=${{ vars.GRADIENT_AGENT_URL_REMEDIATION }}" \
+            -var="gradient_agent_key_counsel=${{ secrets.GRADIENT_AGENT_KEY_COUNSEL }}" \
+            -var="gradient_agent_url_counsel=${{ vars.GRADIENT_AGENT_URL_COUNSEL }}" \
+            -var="slack_webhook_url=${{ secrets.SLACK_WEBHOOK_URL }}" \
+          || exit_code=$?
+          # exit code 0 = no changes, 2 = changes, anything else = error
+          echo "exit_code=${exit_code:-0}" >> "$GITHUB_OUTPUT"
+        continue-on-error: true
+
+      - name: Post plan summary to PR/commit
+        uses: actions/github-script@v7
+        if: always()
+        with:
+          script: |
+            const exitCode = '${{ steps.plan.outputs.exit_code }}';
+            const emoji = exitCode === '0' ? '✅' : exitCode === '2' ? '🔄' : '❌';
+            const status = exitCode === '0' ? 'No changes' : exitCode === '2' ? 'Changes to apply' : 'Plan failed';
+            await core.summary
+              .addHeading('Terraform Plan')
+              .addRaw(`${emoji} **${status}** (exit code: ${exitCode})`)
+              .write();
+
+      - name: terraform apply
+        id: apply
+        if: steps.plan.outputs.exit_code == '2'
+        run: |
+          terraform apply -auto-approve tfplan
+          echo "app_live_url=$(terraform output -raw app_live_url 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
+          echo "db_connection_uri=$(terraform output -raw db_connection_uri 2>/dev/null || echo '')" >> "$GITHUB_OUTPUT"
+
+  # ── 3. Wait for App Platform deployment ─────────────────────────────────────
+  wait-for-deploy:
+    name: "3 · Wait for App Platform"
+    runs-on: ubuntu-latest
+    needs: [terraform]
+    if: always() && needs.terraform.result != 'failure'
+
+    steps:
+      - name: Install doctl
+        uses: digitalocean/action-doctl@v2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_API_TOKEN }}
+
+      - name: Wait for active deployment
+        run: |
+          echo "Waiting for App Platform to finish deploying..."
+          APP_ID=$(doctl apps list --format ID,Spec.Name --no-header | grep gradient-guard | awk '{print $1}' | head -1)
+          if [ -z "$APP_ID" ]; then
+            echo "App not found yet — skipping wait (first deploy via Terraform)"
+            exit 0
+          fi
+          for i in $(seq 1 30); do
+            STATUS=$(doctl apps get "$APP_ID" --format ActiveDeployment.Phase --no-header 2>/dev/null || echo "UNKNOWN")
+            echo "  Attempt $i/30 — status: $STATUS"
+            if [ "$STATUS" = "ACTIVE" ]; then
+              echo "✅ Deployment active!"
+              exit 0
+            elif [[ "$STATUS" == "ERROR" || "$STATUS" == "FAILED" ]]; then
+              echo "❌ Deployment failed with status: $STATUS"
+              doctl apps list-deployments "$APP_ID" --format ID,Phase,CreatedAt --no-header | head -5
+              exit 1
+            fi
+            sleep 20
+          done
+          echo "⚠️  Timed out waiting — check App Platform console"
+          exit 1
+
+  # ── 4. Health checks ─────────────────────────────────────────────────────────
+  health-check:
+    name: "4 · Health Check"
+    runs-on: ubuntu-latest
+    needs: [wait-for-deploy]
+    if: always() && needs.wait-for-deploy.result == 'success'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run health checks
+        run: bash scripts/check-health.sh
+        env:
+          GRADIENT_AGENT_URL_SENTINEL:   ${{ vars.GRADIENT_AGENT_URL_SENTINEL }}
+          GRADIENT_AGENT_URL_EVIDENCE:   ${{ vars.GRADIENT_AGENT_URL_EVIDENCE }}
+          GRADIENT_AGENT_URL_REMEDIATION: ${{ vars.GRADIENT_AGENT_URL_REMEDIATION }}
+          GRADIENT_AGENT_URL_COUNSEL:    ${{ vars.GRADIENT_AGENT_URL_COUNSEL }}
+          API_URL: "https://gradient-guard-api.ondigitalocean.app"
+          WEB_URL: "https://gradient-guard.ondigitalocean.app"
+
+  # ── 5. Notify Slack on failure ───────────────────────────────────────────────
+  notify-failure:
+    name: "5 · Notify on failure"
+    runs-on: ubuntu-latest
+    needs: [deploy-agents, terraform, wait-for-deploy, health-check]
+    if: failure() && vars.SLACK_WEBHOOK_URL != ''
+
+    steps:
+      - name: Slack failure notification
+        uses: slackapi/slack-github-action@v1
+        with:
+          payload: |
+            {
+              "text": "❌ *GradientGuard deploy failed* — <${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}|View run>",
+              "attachments": [{
+                "color": "#ff4444",
+                "fields": [
+                  {"title": "Branch", "value": "${{ github.ref_name }}", "short": true},
+                  {"title": "Commit", "value": "${{ github.sha }}", "short": true},
+                  {"title": "Triggered by", "value": "${{ github.actor }}"}
+                ]
+              }]
+            }
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK

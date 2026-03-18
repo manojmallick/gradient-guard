@@ -1,0 +1,165 @@
+name: gradient-guard
+region: ams  # Amsterdam — EU data residency for DORA/GDPR compliance
+
+services:
+  # ── Frontend ────────────────────────────────────────────────
+  - name: web
+    source_dir: packages/web
+    github:
+      repo: manojmallick/gradient-guard
+      branch: main
+      deploy_on_push: true
+    build_command: npm install && npm run build
+    run_command: npm start
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    health_check:
+      http_path: /
+    envs:
+      - key: NEXT_PUBLIC_API_URL
+        value: ${api.PUBLIC_URL}
+      - key: NEXT_PUBLIC_APP_URL
+        value: ${APP_URL}
+      - key: GRADIENT_AGENT_KEY_COUNSEL
+        scope: RUN_TIME
+        type: SECRET
+      - key: GRADIENT_AGENT_URL_COUNSEL
+        scope: RUN_TIME
+        type: SECRET
+    routes:
+      - path: /
+
+  # ── API ──────────────────────────────────────────────────────
+  - name: api
+    source_dir: packages/api
+    github:
+      repo: manojmallick/gradient-guard
+      branch: main
+      deploy_on_push: true
+    build_command: npm install && npm run build
+    run_command: npm start
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    health_check:
+      http_path: /health
+    envs:
+      - key: NODE_ENV
+        value: production
+      - key: API_PORT
+        value: "8080"
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: DIGITALOCEAN_API_TOKEN
+        scope: RUN_TIME
+        type: SECRET
+      - key: GRADIENT_MODEL_ACCESS_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: GRADIENT_AGENT_KEY_SENTINEL
+        scope: RUN_TIME
+        type: SECRET
+      - key: GRADIENT_AGENT_URL_SENTINEL
+        scope: RUN_TIME
+        type: SECRET
+      - key: GRADIENT_AGENT_KEY_EVIDENCE
+        scope: RUN_TIME
+        type: SECRET
+      - key: GRADIENT_AGENT_URL_EVIDENCE
+        scope: RUN_TIME
+        type: SECRET
+      - key: GRADIENT_AGENT_KEY_REMEDIATION
+        scope: RUN_TIME
+        type: SECRET
+      - key: GRADIENT_AGENT_URL_REMEDIATION
+        scope: RUN_TIME
+        type: SECRET
+      - key: GRADIENT_AGENT_KEY_COUNSEL
+        scope: RUN_TIME
+        type: SECRET
+      - key: GRADIENT_AGENT_URL_COUNSEL
+        scope: RUN_TIME
+        type: SECRET
+      - key: DO_SPACES_KEY
+        scope: RUN_TIME
+        type: SECRET
+      - key: DO_SPACES_SECRET
+        scope: RUN_TIME
+        type: SECRET
+      - key: DO_SPACES_ENDPOINT
+        value: https://ams3.digitaloceanspaces.com
+      - key: DO_SPACES_BUCKET
+        value: gradient-guard-evidence
+      - key: DO_SPACES_CDN_ENDPOINT
+        value: https://gradient-guard-evidence.ams3.cdn.digitaloceanspaces.com
+      - key: SLACK_WEBHOOK_URL
+        scope: RUN_TIME
+        type: SECRET
+    routes:
+      - path: /api
+      - path: /health
+
+  # ── Sentinel Cron Worker (triggers DORASentinel every 60s) ───
+  - name: sentinel-worker
+    source_dir: packages/api
+    github:
+      repo: manojmallick/gradient-guard
+      branch: main
+      deploy_on_push: true
+    build_command: npm install && npm run build
+    run_command: node dist/workers/sentinel-cron.js
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET
+      - key: GRADIENT_AGENT_KEY_SENTINEL
+        scope: RUN_TIME
+        type: SECRET
+      - key: GRADIENT_AGENT_URL_SENTINEL
+        scope: RUN_TIME
+        type: SECRET
+      - key: GRADIENT_AGENT_KEY_EVIDENCE
+        scope: RUN_TIME
+        type: SECRET
+      - key: GRADIENT_AGENT_URL_EVIDENCE
+        scope: RUN_TIME
+        type: SECRET
+      - key: GRADIENT_AGENT_KEY_REMEDIATION
+        scope: RUN_TIME
+        type: SECRET
+      - key: GRADIENT_AGENT_URL_REMEDIATION
+        scope: RUN_TIME
+        type: SECRET
+      - key: NODE_ENV
+        value: production
+
+databases:
+  - name: gradient-guard-db
+    engine: PG
+    version: "16"
+    size: db-s-1vcpu-1gb
+    num_nodes: 1
+
+jobs:
+  # Runs BEFORE services start on every deploy — ensures schema is current
+  - name: db-migrate
+    source_dir: packages/api
+    github:
+      repo: manojmallick/gradient-guard
+      branch: main
+      deploy_on_push: true
+    kind: PRE_DEPLOY
+    environment_slug: node-js
+    instance_count: 1
+    instance_size_slug: apps-s-1vcpu-0.5gb
+    build_command: npm install
+    run_command: npx drizzle-kit push
+    envs:
+      - key: DATABASE_URL
+        scope: RUN_TIME
+        type: SECRET

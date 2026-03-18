@@ -1,0 +1,6 @@
+question,expected_contains
+"What is the RTO requirement under DORA Article 11?","4 hours"
+"Is a database outage a DORA breach?","Article 11"
+"What severity is a combined RTO and RPO breach?","P1"
+"What constitutes a major ICT incident under DORA?","Article 3"
+"How often should ICT thresholds be reviewed?","annually"

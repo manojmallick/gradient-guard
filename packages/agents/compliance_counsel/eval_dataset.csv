@@ -1,0 +1,11 @@
+question,expected_contains
+"What is the RTO requirement under DORA Article 11?","4 hours"
+"Which DORA article covers ICT incident reporting?","Article 19"
+"What evidence is required after a major ICT incident?","Article 17"
+"How does DORA define a major ICT incident?","Article 3"
+"What are the DORA testing requirements?","Article 25"
+"Does DORA apply to cloud service providers?","Article 28"
+"What is the difference between DORA and NIS2?","financial sector"
+"How often must ICT risk management frameworks be reviewed?","annually"
+"What is required in an ICT business continuity policy?","Article 11"
+"What are third-party ICT risk requirements?","Article 28"
