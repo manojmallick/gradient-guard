@@ -8,20 +8,10 @@ terraform {
     }
   }
 
-  # Store state in DO Spaces (Amsterdam ams3 — EU data residency for DORA/GDPR)
-  # Bucket must exist before first `terraform init` — see DEPLOY.md Step 2
-  backend "s3" {
-    endpoints = {
-      s3 = "https://ams3.digitaloceanspaces.com" # Amsterdam
-    }
-    bucket                      = "gradient-guard-tf-state"
-    key                         = "terraform.tfstate"
-    region                      = "us-east-1" # S3 backend requires this; DO Spaces ignores it
-    skip_credentials_validation = true
-    skip_requesting_account_id  = true
-    skip_metadata_api_check     = true
-    skip_region_validation      = true
-    force_path_style            = true
+  # Local backend — state is cached in GitHub Actions between runs.
+  # No Spaces keys required; only DIGITALOCEAN_API_TOKEN is needed.
+  backend "local" {
+    path = "terraform.tfstate"
   }
 }
 
