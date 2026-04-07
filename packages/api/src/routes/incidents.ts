@@ -10,20 +10,25 @@ export const incidentsRouter = Router();
 
 // GET /api/incidents — list with optional filters
 incidentsRouter.get("/", async (req: Request, res: Response) => {
-  const severity = req.query.severity as string | undefined;
-  const status = req.query.status as string | undefined;
+  try {
+    const severity = req.query.severity as string | undefined;
+    const status = req.query.status as string | undefined;
 
-  const rows = await db.query.incidents.findMany({
-    where: (t, { and, eq }) =>
-      and(
-        severity ? eq(t.severity, severity) : undefined,
-        status ? eq(t.status, status) : undefined
-      ),
-    orderBy: [desc(incidents.detectedAt)],
-    limit: 100,
-  });
+    const rows = await db.query.incidents.findMany({
+      where: (t, { and, eq }) =>
+        and(
+          severity ? eq(t.severity, severity) : undefined,
+          status ? eq(t.status, status) : undefined
+        ),
+      orderBy: [desc(incidents.detectedAt)],
+      limit: 100,
+    });
 
-  res.json({ incidents: rows });
+    res.json({ incidents: rows });
+  } catch (error) {
+    console.error("GET /api/incidents failed", error);
+    res.json({ incidents: [] });
+  }
 });
 
 // GET /api/incidents/stream — SSE stream
@@ -47,14 +52,19 @@ incidentsRouter.get("/stream", (req: Request, res: Response) => {
 
 // GET /api/incidents/:id — single incident
 incidentsRouter.get("/:id", async (req: Request, res: Response) => {
-  const incident = await db.query.incidents.findFirst({
-    where: (t, { eq }) => eq(t.id, req.params.id),
-  });
-  if (!incident) {
-    res.status(404).json({ error: "Incident not found" });
-    return;
+  try {
+    const incident = await db.query.incidents.findFirst({
+      where: (t, { eq }) => eq(t.id, req.params.id),
+    });
+    if (!incident) {
+      res.status(404).json({ error: "Incident not found" });
+      return;
+    }
+    res.json({ incident });
+  } catch (error) {
+    console.error("GET /api/incidents/:id failed", error);
+    res.status(503).json({ error: "Incidents unavailable" });
   }
-  res.json({ incident });
 });
 
 // POST /api/incidents — create manually (demo/testing)
@@ -70,16 +80,22 @@ incidentsRouter.post("/", async (req: Request, res: Response) => {
     res.status(400).json({ error: parsed.error.flatten() });
     return;
   }
-  const [created] = await db
-    .insert(incidents)
-    .values({
-      severity: parsed.data.severity,
-      doraArticles: parsed.data.doraArticles,
-      details: parsed.data.details,
-      status: "open",
-    })
-    .returning();
-  res.status(201).json({ incident: created });
+
+  try {
+    const [created] = await db
+      .insert(incidents)
+      .values({
+        severity: parsed.data.severity,
+        doraArticles: parsed.data.doraArticles,
+        details: parsed.data.details,
+        status: "open",
+      })
+      .returning();
+    res.status(201).json({ incident: created });
+  } catch (error) {
+    console.error("POST /api/incidents failed", error);
+    res.status(503).json({ error: "Incidents unavailable" });
+  }
 });
 
 // PUT /api/incidents/:id — update status
@@ -93,14 +109,20 @@ incidentsRouter.put("/:id", async (req: Request, res: Response) => {
     res.status(400).json({ error: parsed.error.flatten() });
     return;
   }
-  const [updated] = await db
-    .update(incidents)
-    .set({ status: parsed.data.status, updatedAt: new Date() })
-    .where(eq(incidents.id, req.params.id))
-    .returning();
-  if (!updated) {
-    res.status(404).json({ error: "Incident not found" });
-    return;
+
+  try {
+    const [updated] = await db
+      .update(incidents)
+      .set({ status: parsed.data.status, updatedAt: new Date() })
+      .where(eq(incidents.id, req.params.id))
+      .returning();
+    if (!updated) {
+      res.status(404).json({ error: "Incident not found" });
+      return;
+    }
+    res.json({ incident: updated });
+  } catch (error) {
+    console.error("PUT /api/incidents/:id failed", error);
+    res.status(503).json({ error: "Incidents unavailable" });
   }
-  res.json({ incident: updated });
 });

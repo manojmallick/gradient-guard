@@ -39,58 +39,78 @@ agentsRouter.post("/simulate", async (req: Request, res: Response) => {
     },
   ];
 
-  const [created] = await db
-    .insert(incidents)
-    .values({
-      severity: "P1",
-      doraArticles: [
-        "Article 11(3) - ICT continuity",
-        "Article 11(2) - Data backup and recovery",
-      ],
-      details: demoIncidents,
-      status: "open",
-    })
-    .returning();
+  try {
+    const [created] = await db
+      .insert(incidents)
+      .values({
+        severity: "P1",
+        doraArticles: [
+          "Article 11(3) - ICT continuity",
+          "Article 11(2) - Data backup and recovery",
+        ],
+        details: demoIncidents,
+        status: "open",
+      })
+      .returning();
 
-  broadcast("incident", created);
+    broadcast("incident", created);
 
-  res.status(201).json({
-    message: "Demo P1 incident created",
-    incident_id: created.id,
-  });
+    res.status(201).json({
+      message: "Demo P1 incident created",
+      incident_id: created.id,
+    });
+  } catch (error) {
+    console.error("POST /api/simulate failed", error);
+    res.status(503).json({ error: "Simulation unavailable" });
+  }
 });
 
 // GET /api/compliance/score — compute live DORA score
 agentsRouter.get("/compliance/score", async (_req: Request, res: Response) => {
-  const openIncidents = await db.query.incidents.findMany({
-    where: (t, { eq }) => eq(t.status, "open"),
-    orderBy: [desc(incidents.detectedAt)],
-    limit: 50,
-  });
+  try {
+    const openIncidents = await db.query.incidents.findMany({
+      where: (t, { eq }) => eq(t.status, "open"),
+      orderBy: [desc(incidents.detectedAt)],
+      limit: 50,
+    });
 
-  let score = 100;
-  const breakdown: Record<string, number> = {
-    "Article 11": 100,
-    "Article 17": 100,
-    "Article 19": 100,
-    "Article 25": 100,
-    "Article 28": 100,
-  };
+    let score = 100;
+    const breakdown: Record<string, number> = {
+      "Article 11": 100,
+      "Article 17": 100,
+      "Article 19": 100,
+      "Article 25": 100,
+      "Article 28": 100,
+    };
 
-  for (const inc of openIncidents) {
-    const deduction =
-      inc.severity === "P1" ? 20 : inc.severity === "P2" ? 10 : 5;
-    score = Math.max(0, score - deduction);
+    for (const inc of openIncidents) {
+      const deduction =
+        inc.severity === "P1" ? 20 : inc.severity === "P2" ? 10 : 5;
+      score = Math.max(0, score - deduction);
 
-    const articles = (inc.doraArticles as string[]) ?? [];
-    for (const article of articles) {
-      for (const key of Object.keys(breakdown)) {
-        if (article.includes(key)) {
-          breakdown[key] = Math.max(0, (breakdown[key] ?? 100) - deduction);
+      const articles = (inc.doraArticles as string[]) ?? [];
+      for (const article of articles) {
+        for (const key of Object.keys(breakdown)) {
+          if (article.includes(key)) {
+            breakdown[key] = Math.max(0, (breakdown[key] ?? 100) - deduction);
+          }
         }
       }
     }
-  }
 
-  res.json({ score, breakdown, open_incidents: openIncidents.length });
+    res.json({ score, breakdown, open_incidents: openIncidents.length });
+  } catch (error) {
+    console.error("GET /api/compliance/score failed", error);
+    res.json({
+      score: 0,
+      breakdown: {
+        "Article 11": 0,
+        "Article 17": 0,
+        "Article 19": 0,
+        "Article 25": 0,
+        "Article 28": 0,
+      },
+      open_incidents: 0,
+    });
+  }
 });
