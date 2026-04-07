@@ -5,12 +5,77 @@ import { incidents } from "../db/schema";
 import { desc } from "drizzle-orm";
 import { broadcast } from "../services/sse";
 import { z } from "zod";
+import { env } from "../lib/env";
 import {
   createFallbackIncident,
   listFallbackIncidents,
+  updateFallbackIncidentEvidence,
 } from "../services/fallback-store";
 
 export const agentsRouter = Router();
+
+async function dispatchDownstreamAgents(payload: {
+  incident_id: string;
+  severity: "P1" | "P2" | "P3";
+  dora_articles: string[];
+  incidents: unknown[];
+}): Promise<void> {
+  const hasEvidence =
+    Boolean(env.GRADIENT_AGENT_URL_EVIDENCE) &&
+    Boolean(env.GRADIENT_AGENT_KEY_EVIDENCE);
+  const hasRemediation =
+    Boolean(env.GRADIENT_AGENT_URL_REMEDIATION) &&
+    Boolean(env.GRADIENT_AGENT_KEY_REMEDIATION);
+
+  if (!hasEvidence && !hasRemediation) {
+    return;
+  }
+
+  const body = { messages: [{ role: "user", content: JSON.stringify(payload) }] };
+  const tasks: Array<Promise<void>> = [];
+
+  if (hasEvidence) {
+    tasks.push(
+      fetch(`${env.GRADIENT_AGENT_URL_EVIDENCE}/run`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.GRADIENT_AGENT_KEY_EVIDENCE}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      })
+        .then(async (res) => {
+          if (!res.ok) {
+            return;
+          }
+          const json = (await res.json()) as { evidence_url?: string };
+          if (json.evidence_url) {
+            updateFallbackIncidentEvidence(payload.incident_id, json.evidence_url);
+          }
+        })
+        .catch(() => {
+          // Keep demo path resilient even if evidence agent is unavailable.
+        })
+    );
+  }
+
+  if (hasRemediation) {
+    tasks.push(
+      fetch(`${env.GRADIENT_AGENT_URL_REMEDIATION}/run`, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${env.GRADIENT_AGENT_KEY_REMEDIATION}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
+      })
+        .then(() => undefined)
+        .catch(() => undefined)
+    );
+  }
+
+  await Promise.all(tasks);
+}
 
 // POST /api/counsel — stream compliance Q&A from A4
 agentsRouter.post("/counsel", async (req: Request, res: Response) => {
@@ -82,6 +147,14 @@ agentsRouter.post("/simulate", async (req: Request, res: Response) => {
       incident_id: fallback.id,
       storage: "memory",
     });
+
+    const downstreamPayload = {
+      incident_id: fallback.id,
+      severity: "P1" as const,
+      dora_articles: fallback.doraArticles,
+      incidents: demoIncidents,
+    };
+    void dispatchDownstreamAgents(downstreamPayload);
   }
 });
 

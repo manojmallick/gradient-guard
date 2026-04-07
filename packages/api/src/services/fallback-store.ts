@@ -92,3 +92,18 @@ export function updateFallbackIncidentStatus(
   }
   return incident;
 }
+
+export function updateFallbackIncidentEvidence(
+  id: string,
+  evidenceUrl: string
+): FallbackIncident | undefined {
+  const incident = fallbackIncidents.find((item) => item.id === id);
+  if (!incident) {
+    return undefined;
+  }
+
+  incident.evidenceUrl = evidenceUrl;
+  incident.evidenceGeneratedAt = new Date().toISOString();
+  incident.updatedAt = new Date().toISOString();
+  return incident;
+}
