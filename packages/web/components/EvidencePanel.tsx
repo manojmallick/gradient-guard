@@ -16,11 +16,7 @@ export default function EvidencePanel() {
   useEffect(() => {
     fetch("/api/incidents")
       .then((r) => r.json())
-      .then((d) =>
-        setIncidents(
-          (d.incidents ?? []).filter((i: Incident) => i.evidenceUrl)
-        )
-      );
+      .then((d) => setIncidents((d.incidents ?? []).slice(0, 20)));
   }, []);
 
   if (!incidents.length) {
@@ -83,7 +79,14 @@ export default function EvidencePanel() {
                     Download PDF
                   </a>
                 ) : (
-                  <span className="text-slate-600 text-xs">Generating…</span>
+                  <a
+                    href={`/api/evidence/demo/${inc.id}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-amber-400 hover:text-amber-300 text-xs underline"
+                  >
+                    Open Demo PDF
+                  </a>
                 )}
               </td>
             </tr>

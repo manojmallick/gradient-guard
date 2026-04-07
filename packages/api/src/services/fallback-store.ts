@@ -23,6 +23,10 @@ export interface FallbackIncident {
 
 const fallbackIncidents: FallbackIncident[] = [];
 
+export function buildDemoEvidenceUrl(incidentId: string): string {
+  return `/api/evidence/demo/${incidentId}`;
+}
+
 export function listFallbackIncidents(filters?: {
   severity?: string;
   status?: string;
@@ -46,18 +50,20 @@ export function createFallbackIncident(input: {
   doraArticles: string[];
   details?: unknown[];
   status?: FallbackStatus;
+  evidenceUrl?: string | null;
 }): FallbackIncident {
   const now = new Date().toISOString();
+  const id = randomUUID();
   const incident: FallbackIncident = {
-    id: randomUUID(),
+    id,
     severity: input.severity,
     doraArticles: input.doraArticles,
     details: input.details ?? [],
     status: input.status ?? "open",
     detectedAt: now,
     resolvedAt: null,
-    evidenceUrl: null,
-    evidenceGeneratedAt: null,
+    evidenceUrl: input.evidenceUrl ?? buildDemoEvidenceUrl(id),
+    evidenceGeneratedAt: now,
     rootCause: null,
     remediationPlan: null,
     estimatedRtoMinutes: null,
