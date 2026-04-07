@@ -1,21 +1,20 @@
-import { NextRequest } from "next/server";
-import { getApiBaseUrl } from "../../../lib/api-base";
+import { getApiBaseUrl } from "../../../../lib/api-base";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 const API_BASE = getApiBaseUrl();
 
-export async function POST(request: NextRequest) {
+export async function GET() {
   try {
-    const { question } = await request.json();
-
-    const upstream = await fetch(`${API_BASE}/api/counsel`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question }),
+    const upstream = await fetch(`${API_BASE}/api/incidents/stream`, {
+      headers: { Accept: "text/event-stream" },
+      cache: "no-store",
     });
 
     if (!upstream.ok || !upstream.body) {
       return new Response(
-        JSON.stringify({ error: "Upstream counsel service unavailable" }),
+        JSON.stringify({ error: "Upstream incident stream unavailable" }),
         {
           status: upstream.status || 502,
           headers: { "Content-Type": "application/json" },
@@ -23,8 +22,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Stream the SSE response through
     return new Response(upstream.body, {
+      status: 200,
       headers: {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
@@ -33,7 +32,7 @@ export async function POST(request: NextRequest) {
     });
   } catch {
     return new Response(
-      JSON.stringify({ error: "Upstream counsel service unavailable" }),
+      JSON.stringify({ error: "Upstream incident stream unavailable" }),
       {
         status: 502,
         headers: { "Content-Type": "application/json" },

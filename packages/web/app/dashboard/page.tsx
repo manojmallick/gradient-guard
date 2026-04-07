@@ -4,15 +4,17 @@ import IncidentFeed from "../../components/IncidentFeed";
 import DoProductBadge from "../../components/DoProductBadge";
 import SimulateButton from "../../components/SimulateButton";
 import RoiCalculator from "../../components/RoiCalculator";
+import { getApiBaseUrl } from "../../lib/api-base";
 
 export const dynamic = "force-dynamic";
 
+const API_BASE = getApiBaseUrl();
+
 async function getComplianceScore() {
   try {
-    const res = await fetch(
-      `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001"}/api/compliance/score`,
-      { cache: "no-store" }
-    );
+    const res = await fetch(`${API_BASE}/api/compliance/score`, {
+      cache: "no-store",
+    });
     if (!res.ok) return { score: 0, breakdown: {}, open_incidents: 0 };
     return await res.json();
   } catch {

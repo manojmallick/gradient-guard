@@ -1,11 +1,13 @@
 import { NextResponse } from "next/server";
-import { getApiBaseUrl } from "../../../lib/api-base";
+import { getApiBaseUrl } from "../../../../lib/api-base";
 
 const API_BASE = getApiBaseUrl();
 
-export async function POST() {
+export async function GET() {
   try {
-    const res = await fetch(`${API_BASE}/api/simulate`, { method: "POST" });
+    const res = await fetch(`${API_BASE}/api/compliance/score`, {
+      cache: "no-store",
+    });
     const data = await res.json();
     return NextResponse.json(data, { status: res.status });
   } catch {

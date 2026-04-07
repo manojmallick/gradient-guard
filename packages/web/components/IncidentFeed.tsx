@@ -43,9 +43,7 @@ export default function IncidentFeed({ maxItems = 10 }: Props) {
       .then((d) => setIncidents((d.incidents ?? []).slice(0, maxItems)));
 
     // SSE stream for real-time updates
-    const es = new EventSource(
-      `${process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:3001"}/api/incidents/stream`
-    );
+    const es = new EventSource("/api/incidents/stream");
     es.addEventListener("incident", (e) => {
       const inc = JSON.parse(e.data) as Incident;
       setIncidents((prev) => [inc, ...prev].slice(0, maxItems));
