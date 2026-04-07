@@ -5,6 +5,10 @@ import { incidents } from "../db/schema";
 import { desc } from "drizzle-orm";
 import { broadcast } from "../services/sse";
 import { z } from "zod";
+import {
+  createFallbackIncident,
+  listFallbackIncidents,
+} from "../services/fallback-store";
 
 export const agentsRouter = Router();
 
@@ -61,7 +65,23 @@ agentsRouter.post("/simulate", async (req: Request, res: Response) => {
     });
   } catch (error) {
     console.error("POST /api/simulate failed", error);
-    res.status(503).json({ error: "Simulation unavailable" });
+    const fallback = createFallbackIncident({
+      severity: "P1",
+      doraArticles: [
+        "Article 11(3) - ICT continuity",
+        "Article 11(2) - Data backup and recovery",
+      ],
+      details: demoIncidents,
+      status: "open",
+    });
+
+    broadcast("incident", fallback);
+
+    res.status(201).json({
+      message: "Demo P1 incident created",
+      incident_id: fallback.id,
+      storage: "memory",
+    });
   }
 });
 
@@ -101,16 +121,35 @@ agentsRouter.get("/compliance/score", async (_req: Request, res: Response) => {
     res.json({ score, breakdown, open_incidents: openIncidents.length });
   } catch (error) {
     console.error("GET /api/compliance/score failed", error);
+    const openIncidents = listFallbackIncidents({ status: "open" });
+    let score = 100;
+    const breakdown: Record<string, number> = {
+      "Article 11": 100,
+      "Article 17": 100,
+      "Article 19": 100,
+      "Article 25": 100,
+      "Article 28": 100,
+    };
+
+    for (const inc of openIncidents) {
+      const deduction =
+        inc.severity === "P1" ? 20 : inc.severity === "P2" ? 10 : 5;
+      score = Math.max(0, score - deduction);
+
+      for (const article of inc.doraArticles ?? []) {
+        for (const key of Object.keys(breakdown)) {
+          if (article.includes(key)) {
+            breakdown[key] = Math.max(0, (breakdown[key] ?? 100) - deduction);
+          }
+        }
+      }
+    }
+
     res.json({
-      score: 0,
-      breakdown: {
-        "Article 11": 0,
-        "Article 17": 0,
-        "Article 19": 0,
-        "Article 25": 0,
-        "Article 28": 0,
-      },
-      open_incidents: 0,
+      score,
+      breakdown,
+      open_incidents: openIncidents.length,
+      storage: "memory",
     });
   }
 });

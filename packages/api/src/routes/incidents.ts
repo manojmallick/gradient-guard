@@ -5,15 +5,21 @@ import { desc, eq } from "drizzle-orm";
 import { addClient, removeClient } from "../services/sse";
 import { randomUUID } from "crypto";
 import { z } from "zod";
+import {
+  createFallbackIncident,
+  findFallbackIncidentById,
+  listFallbackIncidents,
+  updateFallbackIncidentStatus,
+} from "../services/fallback-store";
 
 export const incidentsRouter = Router();
 
 // GET /api/incidents — list with optional filters
 incidentsRouter.get("/", async (req: Request, res: Response) => {
-  try {
-    const severity = req.query.severity as string | undefined;
-    const status = req.query.status as string | undefined;
+  const severity = req.query.severity as string | undefined;
+  const status = req.query.status as string | undefined;
 
+  try {
     const rows = await db.query.incidents.findMany({
       where: (t, { and, eq }) =>
         and(
@@ -27,7 +33,7 @@ incidentsRouter.get("/", async (req: Request, res: Response) => {
     res.json({ incidents: rows });
   } catch (error) {
     console.error("GET /api/incidents failed", error);
-    res.json({ incidents: [] });
+    res.json({ incidents: listFallbackIncidents({ severity, status }) });
   }
 });
 
@@ -63,7 +69,12 @@ incidentsRouter.get("/:id", async (req: Request, res: Response) => {
     res.json({ incident });
   } catch (error) {
     console.error("GET /api/incidents/:id failed", error);
-    res.status(503).json({ error: "Incidents unavailable" });
+    const incident = findFallbackIncidentById(req.params.id);
+    if (!incident) {
+      res.status(404).json({ error: "Incident not found" });
+      return;
+    }
+    res.json({ incident });
   }
 });
 
@@ -94,7 +105,13 @@ incidentsRouter.post("/", async (req: Request, res: Response) => {
     res.status(201).json({ incident: created });
   } catch (error) {
     console.error("POST /api/incidents failed", error);
-    res.status(503).json({ error: "Incidents unavailable" });
+    const fallback = createFallbackIncident({
+      severity: parsed.data.severity,
+      doraArticles: parsed.data.doraArticles,
+      details: parsed.data.details,
+      status: "open",
+    });
+    res.status(201).json({ incident: fallback, storage: "memory" });
   }
 });
 
@@ -123,6 +140,11 @@ incidentsRouter.put("/:id", async (req: Request, res: Response) => {
     res.json({ incident: updated });
   } catch (error) {
     console.error("PUT /api/incidents/:id failed", error);
-    res.status(503).json({ error: "Incidents unavailable" });
+    const updated = updateFallbackIncidentStatus(req.params.id, parsed.data.status);
+    if (!updated) {
+      res.status(404).json({ error: "Incident not found" });
+      return;
+    }
+    res.json({ incident: updated, storage: "memory" });
   }
 });

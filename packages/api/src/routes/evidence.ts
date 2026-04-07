@@ -6,9 +6,16 @@ export const evidenceRouter = Router();
 
 // GET /api/evidence/:id — get presigned PDF URL for an incident
 evidenceRouter.get("/:id", async (req: Request, res: Response) => {
-  const incident = await db.query.incidents.findFirst({
-    where: (t, { eq }) => eq(t.id, req.params.id),
-  });
+  let incident;
+  try {
+    incident = await db.query.incidents.findFirst({
+      where: (t, { eq }) => eq(t.id, req.params.id),
+    });
+  } catch (error) {
+    console.error("GET /api/evidence/:id failed", error);
+    res.status(503).json({ error: "Evidence unavailable" });
+    return;
+  }
 
   if (!incident) {
     res.status(404).json({ error: "Incident not found" });
