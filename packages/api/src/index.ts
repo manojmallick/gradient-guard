@@ -6,58 +6,78 @@ import { incidentsRouter } from "./routes/incidents";
 import { agentsRouter } from "./routes/agents";
 import { evidenceRouter } from "./routes/evidence";
 import { healthRouter } from "./routes/health";
-import { db, pool } from "./services/db";
+import { dbSchema, pool } from "./services/db";
 
 const app = express();
 
 // Initialize database schema on startup
 async function initializeDatabase() {
   try {
-    console.log("🔄 Initializing database schema...");
-    // Query to check if incidents table exists
-    const checkTable = await pool.query(
-      `SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name='incidents');`
+    console.log(`Initializing database schema in '${dbSchema}'...`);
+
+    const safeSchema = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(dbSchema)
+      ? dbSchema
+      : "gradientguard";
+
+    await pool.query(`CREATE SCHEMA IF NOT EXISTS ${safeSchema}`);
+    await pool.query(`SET search_path TO ${safeSchema},public`);
+
+    await pool.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ${safeSchema}.incidents (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        severity VARCHAR(3) NOT NULL,
+        dora_articles JSONB NOT NULL DEFAULT '[]',
+        details JSONB NOT NULL DEFAULT '[]',
+        status VARCHAR(20) DEFAULT 'open',
+        detected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        resolved_at TIMESTAMPTZ,
+        evidence_url TEXT,
+        evidence_generated_at TIMESTAMPTZ,
+        root_cause JSONB,
+        remediation_plan JSONB,
+        estimated_rto_minutes INT,
+        remediation_generated_at TIMESTAMPTZ,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_incidents_severity ON ${safeSchema}.incidents(severity)`
     );
-    
-    if (!checkTable.rows[0].exists) {
-      console.log("📝 Creating schema (incidents table not found)...");
-      // Import and run the schema creation
-      try {
-        // Try using drizzle-kit migrate if available
-        const { execSync } = await import("child_process");
-        execSync("npm run db:push", { stdio: "inherit" });
-      } catch {
-        console.warn("⚠️  Auto-migration not available in production, will use fallback");
-        // Fallback: create table directly
-        await pool.query(`
-          CREATE TABLE IF NOT EXISTS incidents (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            severity VARCHAR(3) NOT NULL,
-            dora_articles JSONB NOT NULL DEFAULT '[]',
-            details JSONB NOT NULL DEFAULT '[]',
-            status VARCHAR(20) DEFAULT 'open',
-            detected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            resolved_at TIMESTAMPTZ,
-            evidence_url TEXT,
-            evidence_generated_at TIMESTAMPTZ,
-            root_cause JSONB,
-            remediation_plan JSONB,
-            estimated_rto_minutes INT,
-            remediation_generated_at TIMESTAMPTZ,
-            created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-            updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-          );
-          CREATE INDEX IF NOT EXISTS idx_incidents_severity ON incidents(severity);
-          CREATE INDEX IF NOT EXISTS idx_incidents_detected_at ON incidents(detected_at DESC);
-          CREATE INDEX IF NOT EXISTS idx_incidents_status ON incidents(status);
-        `);
-        console.log("✅ Created incidents table via fallback");
-      }
-    } else {
-      console.log("✅ Database schema already initialized");
-    }
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_incidents_detected_at ON ${safeSchema}.incidents(detected_at DESC)`
+    );
+    await pool.query(
+      `CREATE INDEX IF NOT EXISTS idx_incidents_status ON ${safeSchema}.incidents(status)`
+    );
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ${safeSchema}.compliance_scores (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        score INT NOT NULL,
+        breakdown JSONB NOT NULL DEFAULT '{}',
+        calculated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS ${safeSchema}.audit_log (
+        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        action VARCHAR(100) NOT NULL,
+        actor VARCHAR(50) NOT NULL,
+        resource_type VARCHAR(50),
+        resource_id TEXT,
+        payload JSONB,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      )
+    `);
+
+    console.log("Database bootstrap completed");
   } catch (error) {
-    console.error("❌ Database initialization failed (will continue):", error);
+    console.error("Database initialization failed (continuing in degraded mode):", error);
   }
 }
 
