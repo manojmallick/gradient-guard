@@ -10,7 +10,7 @@ function writeSseHeaders(res: Response): void {
   res.setHeader("Access-Control-Allow-Origin", "*");
 }
 
-async function streamLocalCounselFallback(
+async function streamStaticCounselFallback(
   question: string,
   res: Response,
   reason: "missing_config" | "upstream_error"
@@ -19,8 +19,8 @@ async function streamLocalCounselFallback(
 
   const guidance =
     reason === "missing_config"
-      ? "Compliance Counsel agent is not configured in local mode."
-      : "Compliance Counsel agent call failed, using local fallback.";
+      ? "Compliance Counsel agent credentials are not available in runtime."
+      : "Compliance Counsel agent call failed, using resilient fallback.";
 
   const q = question.toLowerCase();
   const incidents = listFallbackIncidents();
@@ -64,6 +64,51 @@ async function streamLocalCounselFallback(
   res.end();
 }
 
+async function streamModelCounselFallback(
+  question: string,
+  res: Response,
+  reason: "missing_config" | "upstream_error"
+): Promise<void> {
+  if (!env.GRADIENT_MODEL_ACCESS_KEY) {
+    await streamStaticCounselFallback(question, res, reason);
+    return;
+  }
+
+  try {
+    const modelClient = new Gradient({
+      modelAccessKey: env.GRADIENT_MODEL_ACCESS_KEY,
+    });
+
+    const prompt = [
+      "You are ComplianceCounsel for a financial-services DORA program.",
+      "Give a practical, concise answer with explicit references to DORA obligations.",
+      "Include MAS TRM comparison only if requested.",
+      "Format: Direct answer, obligations checklist, and references.",
+      `Question: ${question}`,
+    ].join("\n");
+
+    const stream = await modelClient.chat.completions.create({
+      model: "llama3.3-70b-instruct",
+      stream: true,
+      messages: [{ role: "user", content: prompt }],
+    });
+
+    writeSseHeaders(res);
+
+    for await (const chunk of stream) {
+      const delta = chunk.choices[0]?.delta?.content ?? "";
+      if (delta) {
+        res.write(`data: ${JSON.stringify({ delta })}\n\n`);
+      }
+    }
+
+    res.write("data: [DONE]\n\n");
+    res.end();
+  } catch {
+    await streamStaticCounselFallback(question, res, reason);
+  }
+}
+
 export async function streamCounselResponse(
   question: string,
   res: Response
@@ -72,7 +117,7 @@ export async function streamCounselResponse(
     Boolean(env.GRADIENT_AGENT_URL_COUNSEL) &&
     Boolean(env.GRADIENT_AGENT_KEY_COUNSEL);
   if (!hasCounselConfig) {
-    await streamLocalCounselFallback(question, res, "missing_config");
+    await streamModelCounselFallback(question, res, "missing_config");
     return;
   }
 
@@ -99,6 +144,6 @@ export async function streamCounselResponse(
     res.write("data: [DONE]\n\n");
     res.end();
   } catch {
-    await streamLocalCounselFallback(question, res, "upstream_error");
+    await streamModelCounselFallback(question, res, "upstream_error");
   }
 }
