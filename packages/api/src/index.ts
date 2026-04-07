@@ -23,9 +23,16 @@ app.use(express.json({ limit: "1mb" }));
 
 // Routes
 app.use("/health", healthRouter);
+
+// Support both local direct routing and App Platform path-prefix stripping.
 app.use("/api/incidents", incidentsRouter);
+app.use("/incidents", incidentsRouter);
+
 app.use("/api", agentsRouter);
+app.use("/", agentsRouter);
+
 app.use("/api/evidence", evidenceRouter);
+app.use("/evidence", evidenceRouter);
 
 // 404 catch-all
 app.use((_req, res) => {
