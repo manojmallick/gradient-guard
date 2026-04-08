@@ -68,26 +68,20 @@ services:
   - key: GRADIENT_AGENT_KEY_EVIDENCE
     scope: RUN_TIME
     type: SECRET
-    value: ${DIGITALOCEAN_API_TOKEN}
   - key: GRADIENT_AGENT_URL_EVIDENCE
     scope: RUN_TIME
-    type: SECRET
     value: https://agents.do-ai.run/v1/2f5c17bb-7861-4512-a1a9-db591d3ebb32/evidence-forge/run
   - key: GRADIENT_AGENT_KEY_REMEDIATION
     scope: RUN_TIME
     type: SECRET
-    value: ${DIGITALOCEAN_API_TOKEN}
   - key: GRADIENT_AGENT_URL_REMEDIATION
     scope: RUN_TIME
-    type: SECRET
     value: https://agents.do-ai.run/v1/e88938d5-ff14-4ca7-9da8-84bcd0e45dca/remediation-advisor/run
   - key: GRADIENT_AGENT_KEY_COUNSEL
     scope: RUN_TIME
     type: SECRET
-    value: ${DIGITALOCEAN_API_TOKEN}
   - key: GRADIENT_AGENT_URL_COUNSEL
     scope: RUN_TIME
-    type: SECRET
     value: https://agents.do-ai.run/v1/7fc6d684-3abb-4650-a635-65c76b07f414/compliance-counsel/run
   - key: DO_SPACES_KEY
     scope: RUN_TIME

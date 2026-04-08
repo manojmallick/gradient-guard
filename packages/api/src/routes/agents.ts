@@ -207,12 +207,15 @@ async function dispatchDownstreamAgents(payload: {
   dora_articles: string[];
   incidents: unknown[];
 }): Promise<void> {
+  // Agent keys fall back to the DO API token when not explicitly set —
+  // app.yaml ${DIGITALOCEAN_API_TOKEN} references don't expand for SECRET vars.
+  const evidenceKey    = env.GRADIENT_AGENT_KEY_EVIDENCE    || env.DIGITALOCEAN_API_TOKEN;
+  const remediationKey = env.GRADIENT_AGENT_KEY_REMEDIATION || env.DIGITALOCEAN_API_TOKEN;
+
   const hasEvidence =
-    Boolean(env.GRADIENT_AGENT_URL_EVIDENCE) &&
-    Boolean(env.GRADIENT_AGENT_KEY_EVIDENCE);
+    Boolean(env.GRADIENT_AGENT_URL_EVIDENCE) && Boolean(evidenceKey);
   const hasRemediation =
-    Boolean(env.GRADIENT_AGENT_URL_REMEDIATION) &&
-    Boolean(env.GRADIENT_AGENT_KEY_REMEDIATION);
+    Boolean(env.GRADIENT_AGENT_URL_REMEDIATION) && Boolean(remediationKey);
 
   if (!hasEvidence && !hasRemediation) {
     return;
@@ -226,7 +229,7 @@ async function dispatchDownstreamAgents(payload: {
       fetch(env.GRADIENT_AGENT_URL_EVIDENCE!, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${env.GRADIENT_AGENT_KEY_EVIDENCE}`,
+          Authorization: `Bearer ${evidenceKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
@@ -269,7 +272,7 @@ async function dispatchDownstreamAgents(payload: {
       fetch(env.GRADIENT_AGENT_URL_REMEDIATION!, {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${env.GRADIENT_AGENT_KEY_REMEDIATION}`,
+          Authorization: `Bearer ${remediationKey}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify(body),
