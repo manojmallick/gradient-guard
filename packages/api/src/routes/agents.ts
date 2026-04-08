@@ -2,7 +2,7 @@ import { Router, Request, Response } from "express";
 import { streamCounselResponse } from "../services/gradient";
 import { db } from "../services/db";
 import { incidents } from "../db/schema";
-import { desc } from "drizzle-orm";
+import { desc, eq } from "drizzle-orm";
 import { broadcast } from "../services/sse";
 import { z } from "zod";
 import { env } from "../lib/env";
@@ -46,15 +46,29 @@ async function dispatchDownstreamAgents(payload: {
       })
         .then(async (res) => {
           if (!res.ok) {
+            console.error(`Evidence agent returned ${res.status}`);
             return;
           }
           const json = (await res.json()) as { evidence_url?: string };
           if (json.evidence_url) {
-            updateFallbackIncidentEvidence(payload.incident_id, json.evidence_url);
+            // Update the DB record so the evidence page shows a real URL
+            try {
+              await db
+                .update(incidents)
+                .set({
+                  evidenceUrl: json.evidence_url,
+                  evidenceGeneratedAt: new Date(),
+                  updatedAt: new Date(),
+                })
+                .where(eq(incidents.id, payload.incident_id));
+            } catch {
+              // DB update failed — update the in-memory fallback as a safety net
+              updateFallbackIncidentEvidence(payload.incident_id, json.evidence_url);
+            }
           }
         })
-        .catch(() => {
-          // Keep demo path resilient even if evidence agent is unavailable.
+        .catch((err: unknown) => {
+          console.error("Evidence agent dispatch failed:", err);
         })
     );
   }
@@ -123,6 +137,14 @@ agentsRouter.post("/simulate", async (req: Request, res: Response) => {
       .returning();
 
     broadcast("incident", created);
+
+    // Dispatch evidence + remediation agents in the background
+    void dispatchDownstreamAgents({
+      incident_id: created.id,
+      severity: "P1",
+      dora_articles: created.doraArticles as string[],
+      incidents: demoIncidents,
+    });
 
     res.status(201).json({
       message: "Demo P1 incident created",
