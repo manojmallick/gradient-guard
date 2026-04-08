@@ -113,17 +113,53 @@ export async function streamCounselResponse(
   question: string,
   res: Response
 ): Promise<void> {
+  const counselKey = env.GRADIENT_AGENT_KEY_COUNSEL || env.DIGITALOCEAN_API_TOKEN;
   const hasCounselConfig =
     Boolean(env.GRADIENT_AGENT_URL_COUNSEL) &&
-    Boolean(env.GRADIENT_AGENT_KEY_COUNSEL);
+    Boolean(counselKey);
   if (!hasCounselConfig) {
     await streamModelCounselFallback(question, res, "missing_config");
     return;
   }
 
   try {
+    // New agent deployments expose direct invoke endpoints ending with /run.
+    if ((env.GRADIENT_AGENT_URL_COUNSEL ?? "").includes("/run")) {
+      const upstream = await fetch(env.GRADIENT_AGENT_URL_COUNSEL as string, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${counselKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          messages: [{ role: "user", content: question }],
+        }),
+      });
+
+      if (!upstream.ok) {
+        throw new Error(`Counsel /run failed with status ${upstream.status}`);
+      }
+
+      const payload = (await upstream.json()) as
+        | { response?: string; output_text?: string }
+        | Record<string, unknown>;
+
+      const text =
+        payload.response ??
+        payload.output_text ??
+        JSON.stringify(payload, null, 2);
+
+      writeSseHeaders(res);
+      for (const chunk of String(text).match(/.{1,350}/g) ?? [String(text)]) {
+        res.write(`data: ${JSON.stringify({ delta: chunk })}\n\n`);
+      }
+      res.write("data: [DONE]\n\n");
+      res.end();
+      return;
+    }
+
     const counselAgent = new Gradient({
-      agentAccessKey: env.GRADIENT_AGENT_KEY_COUNSEL,
+      agentAccessKey: counselKey,
       agentEndpoint: env.GRADIENT_AGENT_URL_COUNSEL,
     });
 
@@ -143,7 +179,8 @@ export async function streamCounselResponse(
     }
     res.write("data: [DONE]\n\n");
     res.end();
-  } catch {
+  } catch (error) {
+    console.error("Counsel upstream call failed", error);
     await streamModelCounselFallback(question, res, "upstream_error");
   }
 }
