@@ -1,7 +1,15 @@
 import os
 import json
 from typing import TypedDict, Optional
-from gradient_adk import entrypoint, RequestContext, trace
+from gradient_adk import entrypoint, RequestContext
+
+try:
+    from gradient_adk import trace
+except ImportError:
+    def trace(*_args, **_kwargs):
+        def _decorator(func):
+            return func
+        return _decorator
 from langgraph.graph import StateGraph, END
 from gradient import Gradient
 import httpx
@@ -19,9 +27,12 @@ class RemediationState(TypedDict):
     estimated_rto_minutes: Optional[int]
 
 
-gradient_client = Gradient(
-    model_access_key=os.environ.get("GRADIENT_MODEL_ACCESS_KEY", "")
-)
+def get_gradient_client():
+    """Lazy-load Gradient client to handle missing env vars gracefully."""
+    return Gradient(
+        model_access_key=os.environ.get("GRADIENT_MODEL_ACCESS_KEY") or None,
+        access_token=os.environ.get("DIGITALOCEAN_API_TOKEN") or None,
+    )
 
 
 @trace(name="analyze_root_cause")
@@ -40,12 +51,12 @@ Return JSON with:
 - immediate_actions: list[string] (first 15 minutes)
 
 Return ONLY JSON."""
-    resp = gradient_client.chat.completions.create(
-        messages=[{"role": "user", "content": prompt}],
-        model="claude-sonnet-4-6",
-        max_tokens=1500,
-    )
     try:
+        resp = get_gradient_client().chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="claude-sonnet-4-6",
+            max_tokens=1500,
+        )
         rca = json.loads(resp.choices[0].message.content)
         state["root_cause"] = json.dumps(rca)
     except (json.JSONDecodeError, KeyError):
@@ -101,12 +112,12 @@ Return JSON with:
 - post_incident_review: string (DORA Article 17(6) requirement)
 
 Return ONLY JSON."""
-    resp = gradient_client.chat.completions.create(
-        messages=[{"role": "user", "content": prompt}],
-        model="claude-sonnet-4-6",
-        max_tokens=2000,
-    )
     try:
+        resp = get_gradient_client().chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="claude-sonnet-4-6",
+            max_tokens=2000,
+        )
         state["remediation_plan"] = json.loads(resp.choices[0].message.content)
     except (json.JSONDecodeError, KeyError):
         state["remediation_plan"] = {
@@ -129,25 +140,28 @@ async def estimate_recovery_time(state: RemediationState) -> RemediationState:
 @trace(name="update_incident_with_remediation")
 async def update_incident(state: RemediationState) -> RemediationState:
     """Persists the remediation plan to PostgreSQL."""
-    conn = psycopg2.connect(os.environ["DATABASE_URL"])
-    cur = conn.cursor()
-    cur.execute(
-        """
-        UPDATE incidents SET
-            root_cause=%s, remediation_plan=%s,
-            estimated_rto_minutes=%s, remediation_generated_at=NOW()
-        WHERE id=%s
-        """,
-        (
-            state.get("root_cause"),
-            json.dumps(state.get("remediation_plan", {})),
-            state.get("estimated_rto_minutes"),
-            state["incident_id"],
-        ),
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        conn = psycopg2.connect(os.environ["DATABASE_URL"])
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE incidents SET
+                root_cause=%s, remediation_plan=%s,
+                estimated_rto_minutes=%s, remediation_generated_at=NOW()
+            WHERE id=%s
+            """,
+            (
+                state.get("root_cause"),
+                json.dumps(state.get("remediation_plan", {})),
+                state.get("estimated_rto_minutes"),
+                state["incident_id"],
+            ),
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Warning: Could not update incident with remediation in database: {e}")
     return state
 
 
@@ -217,7 +231,22 @@ compiled_graph = build_graph()
 
 @entrypoint
 async def run(context: RequestContext) -> dict:
-    payload = json.loads(context.messages[-1]["content"])
+    messages = getattr(context, "messages", None)
+    if messages is None and isinstance(context, dict):
+        messages = context.get("messages", [])
+    if not messages:
+        return {
+            "status": "error",
+            "message": "missing messages payload",
+        }
+
+    last = messages[-1]
+    if isinstance(last, dict):
+        content = last.get("content", "{}")
+    else:
+        content = getattr(last, "content", "{}")
+
+    payload = json.loads(content)
     result = await compiled_graph.ainvoke(
         {
             **payload,

@@ -1,5 +1,6 @@
 import {
   pgTable,
+  pgSchema,
   uuid,
   varchar,
   jsonb,
@@ -10,7 +11,16 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
-export const incidents = pgTable(
+// Fully-qualify every table so Drizzle never relies on search_path being set.
+// Drizzle throws if "public" is passed to pgSchema — use pgTable for that case.
+const _schemaName = (process.env.DB_SCHEMA ?? "gradientguard").trim();
+const _validSchema = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(_schemaName) ? _schemaName : "gradientguard";
+const _appSchema = _validSchema !== "public" ? pgSchema(_validSchema) : null;
+const defineTable: typeof pgTable = _appSchema
+  ? (_appSchema.table.bind(_appSchema) as unknown as typeof pgTable)
+  : pgTable;
+
+export const incidents = defineTable(
   "incidents",
   {
     id: uuid("id")
@@ -53,7 +63,7 @@ export const incidents = pgTable(
   })
 );
 
-export const complianceScores = pgTable("compliance_scores", {
+export const complianceScores = defineTable("compliance_scores", {
   id: uuid("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),
@@ -64,7 +74,7 @@ export const complianceScores = pgTable("compliance_scores", {
     .defaultNow(),
 });
 
-export const auditLog = pgTable("audit_log", {
+export const auditLog = defineTable("audit_log", {
   id: uuid("id")
     .primaryKey()
     .default(sql`gen_random_uuid()`),

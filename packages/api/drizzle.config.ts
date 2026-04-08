@@ -1,5 +1,7 @@
 import type { Config } from "drizzle-kit";
 
+const schemaName = (process.env.DB_SCHEMA ?? "gradientguard").trim();
+
 export default {
   schema: "./src/db/schema.ts",
   out: "./src/db/migrations",
@@ -10,4 +12,6 @@ export default {
       ? { rejectUnauthorized: false }
       : false,
   },
+  // Only introspect/push the app schema so drizzle-kit ignores public tables.
+  schemaFilter: [schemaName],
 } satisfies Config;

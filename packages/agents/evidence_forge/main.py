@@ -2,13 +2,25 @@ import os
 import json
 from datetime import datetime, timezone
 from typing import TypedDict, Optional
-from gradient_adk import entrypoint, RequestContext, trace
+from gradient_adk import entrypoint, RequestContext
+
+try:
+    from gradient_adk import trace
+except ImportError:
+    def trace(*_args, **_kwargs):
+        def _decorator(func):
+            return func
+        return _decorator
 from langgraph.graph import StateGraph, END
 from gradient import Gradient
 import httpx
 import psycopg2
 import boto3
-from .pdf_builder import build_evidence_pdf
+
+try:
+    from .pdf_builder import build_evidence_pdf
+except ImportError:
+    from pdf_builder import build_evidence_pdf
 
 
 class EvidenceState(TypedDict):
@@ -23,9 +35,12 @@ class EvidenceState(TypedDict):
     spaces_url: Optional[str]
 
 
-gradient_client = Gradient(
-    model_access_key=os.environ.get("GRADIENT_MODEL_ACCESS_KEY", "")
-)
+def get_gradient_client():
+    """Lazy-load Gradient client to handle missing env vars gracefully."""
+    return Gradient(
+        model_access_key=os.environ.get("GRADIENT_MODEL_ACCESS_KEY") or None,
+        access_token=os.environ.get("DIGITALOCEAN_API_TOKEN") or None,
+    )
 
 
 @trace(name="fetch_logs_and_metrics")
@@ -60,12 +75,12 @@ Incidents: {json.dumps(state['incidents'])}
 Logs (last 50 entries): {json.dumps(state['logs'][:50])}
 
 Return ONLY a JSON array, no markdown."""
-    resp = gradient_client.chat.completions.create(
-        messages=[{"role": "user", "content": prompt}],
-        model="claude-sonnet-4-5",
-        max_tokens=2000,
-    )
     try:
+        resp = get_gradient_client().chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="claude-sonnet-4-5",
+            max_tokens=2000,
+        )
         state["timeline"] = json.loads(resp.choices[0].message.content)
     except json.JSONDecodeError:
         state["timeline"] = [
@@ -146,18 +161,21 @@ async def upload_to_spaces(state: EvidenceState) -> EvidenceState:
 @trace(name="update_incident_record")
 async def update_incident_record(state: EvidenceState) -> EvidenceState:
     """Updates the incident record in PostgreSQL with the evidence URL."""
-    conn = psycopg2.connect(os.environ["DATABASE_URL"])
-    cur = conn.cursor()
-    cur.execute(
-        """
-        UPDATE incidents SET evidence_url=%s, evidence_generated_at=NOW()
-        WHERE id=%s
-        """,
-        (state["spaces_url"], state["incident_id"]),
-    )
-    conn.commit()
-    cur.close()
-    conn.close()
+    try:
+        conn = psycopg2.connect(os.environ["DATABASE_URL"])
+        cur = conn.cursor()
+        cur.execute(
+            """
+            UPDATE incidents SET evidence_url=%s, evidence_generated_at=NOW()
+            WHERE id=%s
+            """,
+            (state["spaces_url"], state["incident_id"]),
+        )
+        conn.commit()
+        cur.close()
+        conn.close()
+    except Exception as e:
+        print(f"Warning: Could not update incident record in database: {e}")
     return state
 
 
@@ -185,7 +203,22 @@ compiled_graph = build_graph()
 
 @entrypoint
 async def run(context: RequestContext) -> dict:
-    payload = json.loads(context.messages[-1]["content"])
+    messages = getattr(context, "messages", None)
+    if messages is None and isinstance(context, dict):
+        messages = context.get("messages", [])
+    if not messages:
+        return {
+            "status": "error",
+            "message": "missing messages payload",
+        }
+
+    last = messages[-1]
+    if isinstance(last, dict):
+        content = last.get("content", "{}")
+    else:
+        content = getattr(last, "content", "{}")
+
+    payload = json.loads(content)
     result = await compiled_graph.ainvoke(
         {
             **payload,

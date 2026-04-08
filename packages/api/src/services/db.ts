@@ -16,10 +16,14 @@ const pool = new Pool({
   connectionTimeoutMillis: 5000,
 });
 
+// Set search_path on every new connection as a belt-and-suspenders safety net.
+// Primary schema qualification is done via pgSchema() in schema.ts so this is
+// only needed for raw pool.query() calls (e.g. initializeDatabase in index.ts).
 pool.on("connect", (client) => {
-  // Prefer app schema first and still allow reads from public if objects exist there.
   const searchPath = `${dbSchema},public`;
-  void client.query(`SET search_path TO ${searchPath}`);
+  client.query(`SET search_path TO ${searchPath}`).catch((err: unknown) => {
+    console.warn("Failed to set search_path on new connection:", err);
+  });
 });
 
 export const db = drizzle(pool, { schema });

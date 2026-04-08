@@ -1,7 +1,15 @@
 import os
 import json
 from typing import TypedDict, Optional, Literal
-from gradient_adk import entrypoint, RequestContext, trace
+from gradient_adk import entrypoint, RequestContext
+
+try:
+    from gradient_adk import trace
+except ImportError:
+    def trace(*_args, **_kwargs):
+        def _decorator(func):
+            return func
+        return _decorator
 from langgraph.graph import StateGraph, END
 from gradient import Gradient
 import psycopg2
@@ -17,9 +25,12 @@ class CounselState(TypedDict):
     export_url: Optional[str]
 
 
-gradient_client = Gradient(
-    model_access_key=os.environ.get("GRADIENT_MODEL_ACCESS_KEY", "")
-)
+def get_gradient_client():
+    """Lazy-load Gradient client to handle missing env vars gracefully."""
+    return Gradient(
+        model_access_key=os.environ.get("GRADIENT_MODEL_ACCESS_KEY") or None,
+        access_token=os.environ.get("DIGITALOCEAN_API_TOKEN") or None,
+    )
 
 
 @trace(name="classify_query_intent")
@@ -47,7 +58,6 @@ async def rag_retrieve(state: CounselState) -> CounselState:
     """Queries all regulation knowledge bases (DORA, NIS2, GDPR, MAS TRM)."""
     from gradient import Gradient as GradientSDK
 
-    sdk = GradientSDK(access_token=os.environ["DIGITALOCEAN_API_TOKEN"])
     all_results = []
     kb_ids = [
         os.environ.get("GRADIENT_KB_DORA_ID"),
@@ -55,23 +65,30 @@ async def rag_retrieve(state: CounselState) -> CounselState:
         os.environ.get("GRADIENT_KB_GDPR_ID"),
         os.environ.get("GRADIENT_KB_MAS_ID"),
     ]
-    for kb_id in [k for k in kb_ids if k]:
+    if any(kb_ids):
         try:
-            result = sdk.knowledge_bases.retrieve(
-                knowledge_base_id=kb_id,
-                query=state["user_query"],
-                top_k=3,
-            )
-            for chunk in result.results:
-                all_results.append(
-                    {
-                        "text": chunk.text,
-                        "source": chunk.metadata.get("source", "Regulation"),
-                        "score": chunk.score,
-                    }
-                )
-        except Exception:
-            pass
+            sdk = GradientSDK(access_token=os.environ["DIGITALOCEAN_API_TOKEN"])
+            for kb_id in [k for k in kb_ids if k]:
+                try:
+                    result = sdk.knowledge_bases.retrieve(
+                        knowledge_base_id=kb_id,
+                        query=state["user_query"],
+                        top_k=3,
+                    )
+                    for chunk in result.results:
+                        all_results.append(
+                            {
+                                "text": chunk.text,
+                                "source": chunk.metadata.get("source", "Regulation"),
+                                "score": chunk.score,
+                            }
+                        )
+                except Exception as e:
+                    print(f"Warning: KB retrieval failed for {kb_id}: {e}")
+        except Exception as e:
+            print(f"Warning: Could not initialize KB SDK: {e}")
+    else:
+        print("Warning: No KB IDs configured; KB retrieval unavailable")
     state["kb_results"] = sorted(
         all_results, key=lambda x: x.get("score", 0), reverse=True
     )[:8]
@@ -84,7 +101,15 @@ async def generate_grounded_answer(state: CounselState) -> CounselState:
     context_text = "\n\n".join(
         f"[{r['source']}]: {r['text']}" for r in state["kb_results"]
     )
-    prompt = f"""You are a DORA, NIS2, and GDPR compliance expert advising a financial institution.
+    
+    if not context_text.strip():
+        # Fallback when no KB context available
+        prompt = f"""You are a DORA compliance expert providing general guidance.
+The question: {state['user_query']}
+
+Provide a practical compliance answer without specific citations."""
+    else:
+        prompt = f"""You are a DORA, NIS2, and GDPR compliance expert advising a financial institution.
 Answer the question using ONLY the provided regulation context. Be precise and cite articles.
 
 Context:
@@ -99,12 +124,18 @@ Format your answer as:
 - Any related obligations to be aware of
 
 If the context does not contain enough information, say so clearly."""
-    resp = gradient_client.chat.completions.create(
-        messages=[{"role": "user", "content": prompt}],
-        model="claude-sonnet-4-5",
-        max_tokens=2000,
-    )
-    state["response"] = resp.choices[0].message.content
+    
+    try:
+        resp = get_gradient_client().chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="claude-sonnet-4-5",
+            max_tokens=2000,
+        )
+        state["response"] = resp.choices[0].message.content
+    except Exception as e:
+        print(f"Warning: LLM call failed: {e}")
+        state["response"] = f"Compliance guidance unavailable: {str(e)}"
+    
     state["citations"] = [
         {"source": r["source"], "excerpt": r["text"][:150]}
         for r in state["kb_results"][:3]
@@ -115,37 +146,46 @@ If the context does not contain enough information, say so clearly."""
 @trace(name="query_incident_history")
 async def query_incident_history(state: CounselState) -> CounselState:
     """Fetches recent incidents from PostgreSQL and summarizes trends."""
-    conn = psycopg2.connect(os.environ["DATABASE_URL"])
-    cur = conn.cursor()
-    cur.execute(
-        """
-        SELECT id, severity, dora_articles, detected_at, status, estimated_rto_minutes
-        FROM incidents ORDER BY detected_at DESC LIMIT 20
-        """
-    )
-    rows = cur.fetchall()
-    cur.close()
-    conn.close()
-    state["incident_history"] = [
-        {
-            "id": str(r[0]),
-            "severity": r[1],
-            "dora_articles": r[2],
-            "detected_at": r[3].isoformat() if r[3] else None,
-            "status": r[4],
-            "estimated_rto_minutes": r[5],
-        }
-        for r in rows
-    ]
+    try:
+        conn = psycopg2.connect(os.environ["DATABASE_URL"])
+        cur = conn.cursor()
+        cur.execute(
+            """
+            SELECT id, severity, dora_articles, detected_at, status, estimated_rto_minutes
+            FROM incidents ORDER BY detected_at DESC LIMIT 20
+            """
+        )
+        rows = cur.fetchall()
+        cur.close()
+        conn.close()
+        state["incident_history"] = [
+            {
+                "id": str(r[0]),
+                "severity": r[1],
+                "dora_articles": r[2],
+                "detected_at": r[3].isoformat() if r[3] else None,
+                "status": r[4],
+                "estimated_rto_minutes": r[5],
+            }
+            for r in rows
+        ]
+    except Exception as e:
+        print(f"Warning: Could not fetch incident history from database: {e}")
+        state["incident_history"] = []
+    
     prompt = f"""Summarize these recent compliance incidents for a compliance officer.
 Highlight patterns, most frequent DORA articles triggered, and any concerning trends.
 Incidents: {json.dumps(state['incident_history'])}"""
-    resp = gradient_client.chat.completions.create(
-        messages=[{"role": "user", "content": prompt}],
-        model="claude-sonnet-4-5",
-        max_tokens=1000,
-    )
-    state["response"] = resp.choices[0].message.content
+    try:
+        resp = get_gradient_client().chat.completions.create(
+            messages=[{"role": "user", "content": prompt}],
+            model="claude-sonnet-4-5",
+            max_tokens=1000,
+        )
+        state["response"] = resp.choices[0].message.content
+    except Exception as e:
+        print(f"Warning: LLM call failed in query_incident_history: {e}")
+        state["response"] = f"Incident summary unavailable: {str(e)}"
     return state
 
 
@@ -178,7 +218,18 @@ compiled_graph = build_graph()
 
 @entrypoint
 async def run(context: RequestContext) -> dict:
-    user_query = context.messages[-1]["content"]
+    messages = getattr(context, "messages", None)
+    if messages is None and isinstance(context, dict):
+        messages = context.get("messages", [])
+    if not messages:
+        user_query = ""
+    else:
+        last = messages[-1]
+        if isinstance(last, dict):
+            user_query = str(last.get("content", ""))
+        else:
+            user_query = str(getattr(last, "content", ""))
+
     result = await compiled_graph.ainvoke(
         {
             "user_query": user_query,
