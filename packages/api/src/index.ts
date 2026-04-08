@@ -10,74 +10,21 @@ import { dbSchema, pool } from "./services/db";
 
 const app = express();
 
-// Initialize database schema on startup
+// Verify database connectivity on startup — tables are pre-created by migration.
 async function initializeDatabase() {
   try {
-    console.log(`Initializing database schema in '${dbSchema}'...`);
-
-    const safeSchema = /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(dbSchema)
-      ? dbSchema
-      : "gradientguard";
-
-    await pool.query(`CREATE SCHEMA IF NOT EXISTS ${safeSchema}`);
-    await pool.query(`SET search_path TO ${safeSchema},public`);
-
-    await pool.query(`CREATE EXTENSION IF NOT EXISTS pgcrypto`);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS ${safeSchema}.incidents (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        severity VARCHAR(3) NOT NULL,
-        dora_articles JSONB NOT NULL DEFAULT '[]',
-        details JSONB NOT NULL DEFAULT '[]',
-        status VARCHAR(20) DEFAULT 'open',
-        detected_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        resolved_at TIMESTAMPTZ,
-        evidence_url TEXT,
-        evidence_generated_at TIMESTAMPTZ,
-        root_cause JSONB,
-        remediation_plan JSONB,
-        estimated_rto_minutes INT,
-        remediation_generated_at TIMESTAMPTZ,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_incidents_severity ON ${safeSchema}.incidents(severity)`
+    const result = await pool.query(
+      "SELECT COUNT(*) AS n FROM information_schema.tables WHERE table_schema = $1 AND table_name = 'incidents'",
+      [dbSchema]
     );
-    await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_incidents_detected_at ON ${safeSchema}.incidents(detected_at DESC)`
-    );
-    await pool.query(
-      `CREATE INDEX IF NOT EXISTS idx_incidents_status ON ${safeSchema}.incidents(status)`
-    );
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS ${safeSchema}.compliance_scores (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        score INT NOT NULL,
-        breakdown JSONB NOT NULL DEFAULT '{}',
-        calculated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    await pool.query(`
-      CREATE TABLE IF NOT EXISTS ${safeSchema}.audit_log (
-        id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-        action VARCHAR(100) NOT NULL,
-        actor VARCHAR(50) NOT NULL,
-        resource_type VARCHAR(50),
-        resource_id TEXT,
-        payload JSONB,
-        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-      )
-    `);
-
-    console.log("Database bootstrap completed");
+    const found = Number(result.rows[0]?.n ?? 0) > 0;
+    if (found) {
+      console.log(`Database ready — schema '${dbSchema}', tables verified ✓`);
+    } else {
+      console.warn(`Database connected but 'incidents' table not found in schema '${dbSchema}'. Run migrations.`);
+    }
   } catch (error) {
-    console.error("Database initialization failed (continuing in degraded mode):", error);
+    console.error("Database connectivity check failed (continuing):", (error as Error).message);
   }
 }
 

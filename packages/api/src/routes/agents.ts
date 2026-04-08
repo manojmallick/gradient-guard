@@ -110,7 +110,7 @@ async function dispatchDownstreamAgents(payload: {
 
   if (hasEvidence) {
     tasks.push(
-      fetch(`${env.GRADIENT_AGENT_URL_EVIDENCE}/run`, {
+      fetch(env.GRADIENT_AGENT_URL_EVIDENCE, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${env.GRADIENT_AGENT_KEY_EVIDENCE}`,
@@ -153,7 +153,7 @@ async function dispatchDownstreamAgents(payload: {
 
   if (hasRemediation) {
     tasks.push(
-      fetch(`${env.GRADIENT_AGENT_URL_REMEDIATION}/run`, {
+      fetch(env.GRADIENT_AGENT_URL_REMEDIATION, {
         method: "POST",
         headers: {
           Authorization: `Bearer ${env.GRADIENT_AGENT_KEY_REMEDIATION}`,

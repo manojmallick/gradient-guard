@@ -104,8 +104,6 @@ services:
   - key: SLACK_WEBHOOK_URL
     scope: RUN_TIME
     type: SECRET
-  - key: NODE_TLS_REJECT_UNAUTHORIZED
-    value: '0'
   - key: DB_SCHEMA
     value: public
   routes:
@@ -134,8 +132,6 @@ workers:
     value: ${gradient-guard-db.DATABASE_URL}
   - key: NODE_ENV
     value: production
-  - key: NODE_TLS_REJECT_UNAUTHORIZED
-    value: '0'
   - key: GRADIENT_AGENT_KEY_SENTINEL
     scope: RUN_TIME
     type: SECRET
