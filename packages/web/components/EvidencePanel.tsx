@@ -10,13 +10,28 @@ interface Incident {
   evidenceGeneratedAt?: string;
 }
 
+async function fetchIncidents(): Promise<Incident[]> {
+  const r = await fetch("/api/incidents", { cache: "no-store" });
+  const d = await r.json();
+  return (d.incidents ?? []).slice(0, 20);
+}
+
 export default function EvidencePanel() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
 
   useEffect(() => {
-    fetch("/api/incidents")
-      .then((r) => r.json())
-      .then((d) => setIncidents((d.incidents ?? []).slice(0, 20)));
+    fetchIncidents().then(setIncidents);
+
+    // Poll every 8s while any incident is still missing evidence
+    const interval = setInterval(async () => {
+      const updated = await fetchIncidents();
+      setIncidents(updated);
+      // Stop polling once all have evidence URLs
+      const allReady = updated.length > 0 && updated.every((i) => i.evidenceUrl);
+      if (allReady) clearInterval(interval);
+    }, 8000);
+
+    return () => clearInterval(interval);
   }, []);
 
   if (!incidents.length) {

@@ -1,59 +1,55 @@
+"use client";
+
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import ComplianceGauge from "../../components/ComplianceGauge";
 import IncidentFeed from "../../components/IncidentFeed";
 import DoProductBadge from "../../components/DoProductBadge";
 import SimulateButton from "../../components/SimulateButton";
 import RoiCalculator from "../../components/RoiCalculator";
-import { getApiBaseUrl } from "../../lib/api-base";
 
-export const dynamic = "force-dynamic";
-
-const API_BASE = getApiBaseUrl();
-
-async function getComplianceScore() {
-  try {
-    const res = await fetch(`${API_BASE}/api/compliance/score`, {
-      cache: "no-store",
-    });
-    if (!res.ok) return { score: 0, breakdown: {}, open_incidents: 0 };
-    return await res.json();
-  } catch {
-    return { score: 0, breakdown: {}, open_incidents: 0 };
-  }
+interface ComplianceData {
+  score: number;
+  breakdown: Record<string, number>;
+  open_incidents: number;
 }
 
-export default async function DashboardPage() {
-  const compliance = await getComplianceScore();
+const DEFAULT: ComplianceData = { score: 100, breakdown: {}, open_incidents: 0 };
+
+export default function DashboardPage() {
+  const [compliance, setCompliance] = useState<ComplianceData>(DEFAULT);
+
+  useEffect(() => {
+    const load = () =>
+      fetch("/api/compliance/score", { cache: "no-store" })
+        .then((r) => r.json())
+        .then(setCompliance)
+        .catch(() => {});
+
+    load();
+    // Refresh score every 15s so it drops live when an incident is triggered
+    const interval = setInterval(load, 15000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="min-h-screen p-6 space-y-6">
       {/* Header */}
       <header className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-white">
-            GradientGuard
-          </h1>
+          <h1 className="text-2xl font-bold text-white">GradientGuard</h1>
           <p className="text-slate-400 text-sm mt-0.5">
             DORA Compliance Intelligence · Powered by DigitalOcean Gradient™ AI
           </p>
         </div>
         <nav className="flex gap-4 text-sm">
-          <Link
-            href="/dashboard/incidents"
-            className="text-slate-300 hover:text-white transition-colors"
-          >
+          <Link href="/dashboard/incidents" className="text-slate-300 hover:text-white transition-colors">
             Incidents
           </Link>
-          <Link
-            href="/dashboard/evidence"
-            className="text-slate-300 hover:text-white transition-colors"
-          >
+          <Link href="/dashboard/evidence" className="text-slate-300 hover:text-white transition-colors">
             Evidence
           </Link>
-          <Link
-            href="/dashboard/counsel"
-            className="text-slate-300 hover:text-white transition-colors"
-          >
+          <Link href="/dashboard/counsel" className="text-slate-300 hover:text-white transition-colors">
             Counsel
           </Link>
         </nav>
@@ -85,10 +81,7 @@ export default async function DashboardPage() {
             <h2 className="text-slate-400 text-sm font-medium uppercase tracking-wider">
               Live Incidents
             </h2>
-            <Link
-              href="/dashboard/incidents"
-              className="text-[var(--do-blue)] text-xs hover:underline"
-            >
+            <Link href="/dashboard/incidents" className="text-[var(--do-blue)] text-xs hover:underline">
               View all →
             </Link>
           </div>

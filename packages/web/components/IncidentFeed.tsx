@@ -42,13 +42,32 @@ export default function IncidentFeed({ maxItems = 10 }: Props) {
       .then((r) => r.json())
       .then((d) => setIncidents((d.incidents ?? []).slice(0, maxItems)));
 
-    // SSE stream for real-time updates
+    // SSE stream for real-time new incidents
     const es = new EventSource("/api/incidents/stream");
     es.addEventListener("incident", (e) => {
       const inc = JSON.parse(e.data) as Incident;
       setIncidents((prev) => [inc, ...prev].slice(0, maxItems));
     });
-    return () => es.close();
+
+    // Poll every 10s to pick up evidenceUrl / remediationPlan set by agents
+    const poll = setInterval(() => {
+      fetch("/api/incidents")
+        .then((r) => r.json())
+        .then((d) => {
+          const updated = (d.incidents ?? []).slice(0, maxItems) as Incident[];
+          setIncidents(updated);
+          // Update selected drawer if it's open
+          setSelected((prev) =>
+            prev ? (updated.find((i) => i.id === prev.id) ?? prev) : null
+          );
+        })
+        .catch(() => {});
+    }, 10000);
+
+    return () => {
+      es.close();
+      clearInterval(poll);
+    };
   }, [maxItems]);
 
   if (!incidents.length) {

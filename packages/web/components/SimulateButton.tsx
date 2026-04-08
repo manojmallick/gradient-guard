@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 import clsx from "clsx";
 
 interface Props {
@@ -10,6 +11,7 @@ interface Props {
 export default function SimulateButton({ className }: Props) {
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
+  const router = useRouter();
 
   const simulate = async () => {
     setLoading(true);
@@ -17,7 +19,12 @@ export default function SimulateButton({ className }: Props) {
     try {
       await fetch("/api/simulate", { method: "POST" });
       setDone(true);
-      setTimeout(() => setDone(false), 3000);
+      // Refresh server components (compliance score, etc.)
+      router.refresh();
+      setTimeout(() => {
+        setDone(false);
+        router.refresh(); // second refresh after agent has had time to respond
+      }, 15000);
     } finally {
       setLoading(false);
     }
