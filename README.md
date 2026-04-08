@@ -6,7 +6,7 @@
 
 [![Deploy to DO](https://www.deploytodo.com/do-btn-blue.svg)](https://cloud.digitalocean.com/apps/new?repo=https://github.com/manojmallick/gradient-guard/tree/main)
 
-**Live Demo:** [https://gradient-guard.ondigitalocean.app  ](https://gradient-guard-74ijs.ondigitalocean.app/dashboard)
+**Live Demo:** [https://gradient-guard-74ijs.ondigitalocean.app  ](https://gradient-guard-74ijs.ondigitalocean.app/dashboard)
 **Builder:** Manoj Mallick · Amsterdam · 15 years FinTech (Major Dutch Banks)
 
 ---
