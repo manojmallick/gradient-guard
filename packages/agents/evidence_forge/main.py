@@ -134,27 +134,46 @@ async def generate_pdf(state: EvidenceState) -> EvidenceState:
 
 @trace(name="upload_to_spaces")
 async def upload_to_spaces(state: EvidenceState) -> EvidenceState:
-    """Uploads PDF to DO Spaces and returns presigned URL (24h expiry)."""
-    s3 = boto3.client(
-        "s3",
-        endpoint_url=os.environ["DO_SPACES_ENDPOINT"],
-        aws_access_key_id=os.environ["DO_SPACES_KEY"],
-        aws_secret_access_key=os.environ["DO_SPACES_SECRET"],
-    )
-    key = f"evidence/{state['incident_id']}/report_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.pdf"
-    s3.put_object(
-        Bucket=os.environ["DO_SPACES_BUCKET"],
-        Key=key,
-        Body=state["pdf_bytes"],
-        ContentType="application/pdf",
-        ACL="private",
-    )
-    url = s3.generate_presigned_url(
-        "get_object",
-        Params={"Bucket": os.environ["DO_SPACES_BUCKET"], "Key": key},
-        ExpiresIn=86400,  # 24 hours
-    )
-    state["spaces_url"] = url
+    """Uploads PDF to DO Spaces. Falls back to base64 data URL when Spaces not configured."""
+    import base64
+
+    spaces_key = os.environ.get("DO_SPACES_KEY", "")
+    spaces_secret = os.environ.get("DO_SPACES_SECRET", "")
+    _placeholder = {"", "placeholder"}
+
+    if spaces_key in _placeholder or spaces_secret in _placeholder:
+        # Spaces not configured — encode PDF as base64 data URL so the
+        # evidence is still persisted and downloadable via the API.
+        b64 = base64.b64encode(state["pdf_bytes"]).decode("utf-8")
+        state["spaces_url"] = f"data:application/pdf;base64,{b64}"
+        return state
+
+    try:
+        s3 = boto3.client(
+            "s3",
+            endpoint_url=os.environ["DO_SPACES_ENDPOINT"],
+            aws_access_key_id=spaces_key,
+            aws_secret_access_key=spaces_secret,
+        )
+        key = f"evidence/{state['incident_id']}/report_{datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')}.pdf"
+        s3.put_object(
+            Bucket=os.environ["DO_SPACES_BUCKET"],
+            Key=key,
+            Body=state["pdf_bytes"],
+            ContentType="application/pdf",
+            ACL="private",
+        )
+        url = s3.generate_presigned_url(
+            "get_object",
+            Params={"Bucket": os.environ["DO_SPACES_BUCKET"], "Key": key},
+            ExpiresIn=86400,
+        )
+        state["spaces_url"] = url
+    except Exception as e:
+        print(f"Warning: Spaces upload failed ({e}), falling back to base64")
+        b64 = base64.b64encode(state["pdf_bytes"]).decode("utf-8")
+        state["spaces_url"] = f"data:application/pdf;base64,{b64}"
+
     return state
 
 

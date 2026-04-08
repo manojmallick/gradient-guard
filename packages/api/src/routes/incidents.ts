@@ -30,7 +30,15 @@ incidentsRouter.get("/", async (req: Request, res: Response) => {
       limit: 100,
     });
 
-    res.json({ incidents: rows });
+    // Replace raw base64 data URLs with the API download endpoint so list
+    // responses stay small. The evidence endpoint decodes them on demand.
+    const sanitized = rows.map((r) => ({
+      ...r,
+      evidenceUrl: r.evidenceUrl?.startsWith("data:")
+        ? `/api/evidence/${r.id}`
+        : r.evidenceUrl,
+    }));
+    res.json({ incidents: sanitized });
   } catch (error) {
     console.error("GET /api/incidents failed", error);
     res.json({ incidents: listFallbackIncidents({ severity, status }) });

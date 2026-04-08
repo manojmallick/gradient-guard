@@ -99,12 +99,23 @@ evidenceRouter.get("/:id", async (req: Request, res: Response) => {
     return;
   }
 
-  // If the URL is a Spaces object key, generate a fresh presigned URL
-  // If it's already a presigned URL, return as-is
-  const url = incident.evidenceUrl;
+  // If stored as a base64 data URL, decode and serve the PDF binary directly.
+  if (incident.evidenceUrl.startsWith("data:application/pdf;base64,")) {
+    const b64 = incident.evidenceUrl.replace("data:application/pdf;base64,", "");
+    const pdfBytes = Buffer.from(b64, "base64");
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename=evidence_${incident.id.slice(0, 8)}.pdf`
+    );
+    res.send(pdfBytes);
+    return;
+  }
+
+  // Spaces presigned URL — return as JSON for the frontend to redirect to.
   res.json({
     incident_id: incident.id,
-    evidence_url: url,
+    evidence_url: incident.evidenceUrl,
     generated_at: incident.evidenceGeneratedAt,
   });
 });

@@ -71,22 +71,18 @@ export default function EvidencePanel() {
               <td className="px-4 py-3">
                 {inc.evidenceUrl ? (
                   <a
-                    href={inc.evidenceUrl}
+                    href={inc.evidenceUrl.startsWith("/api/") ? inc.evidenceUrl : inc.evidenceUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-blue-400 hover:text-blue-300 text-xs underline"
+                    download={inc.evidenceUrl.startsWith("/api/") ? `evidence_${inc.id.slice(0,8)}.pdf` : undefined}
+                    className="inline-flex items-center gap-1 text-blue-400 hover:text-blue-300 text-xs underline"
                   >
-                    Download PDF
+                    📄 Download PDF
                   </a>
                 ) : (
-                  <a
-                    href={`/api/evidence/demo/${inc.id}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-amber-400 hover:text-amber-300 text-xs underline"
-                  >
-                    Open Demo PDF
-                  </a>
+                  <span className="text-slate-500 text-xs italic">
+                    Generating…
+                  </span>
                 )}
               </td>
             </tr>
