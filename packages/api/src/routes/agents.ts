@@ -76,80 +76,85 @@ async function generateFallbackEvidence(payload: {
     });
 
     // ── Section helper (blue rule + heading) ──────────────────────────────────
+    // Note: use only ASCII in PDF text streams — Helvetica Type1 doesn't support Unicode
     let curY = cardY - 20;
     const section = (title: string) => {
-      curY -= 4;
+      curY -= 10;                                           // gap before rule
       ops.push(`0.00 0.34 1.00 rg`);
       ops.push(`${M} ${curY} ${W - 2 * M} 1.5 re f`);
-      curY -= 14;
+      curY -= 16;                                           // gap: rule → heading
       ops.push(`0.04 0.09 0.16 rg`);
       ops.push(`BT /F2 11 Tf ${M} ${curY} Td (${title}) Tj ET`);
-      curY -= 10;
+      curY -= 14;                                           // gap: heading → content
     };
 
     // ── Executive Summary ─────────────────────────────────────────────────────
-    section("1  ·  Executive Summary");
+    section("1. Executive Summary");
     ops.push(`0.12 0.16 0.23 rg`);
     const summaryLine = `Incident ${payload.incident_id.slice(0, 12)}... | Severity: ${payload.severity} | ${incRows.length} breach(es) | ${payload.dora_articles.length} DORA article(s) triggered`;
     ops.push(`BT /F1 8.5 Tf ${M} ${curY} Td (${summaryLine.replace(/[()\\]/g, "")}) Tj ET`);
-    curY -= 16;
+    curY -= 20;
 
     // ── Breaches table ────────────────────────────────────────────────────────
-    section("2  ·  Detected Breaches");
+    section("2. Detected Breaches");
     // header row
     ops.push(`0.04 0.09 0.16 rg`);
-    ops.push(`${M} ${curY - 2} ${W - 2 * M} 16 re f`);
+    ops.push(`${M} ${curY - 4} ${W - 2 * M} 18 re f`);
     ops.push(`1 1 1 rg`);
-    ops.push(`BT /F2 7.5 Tf ${M + 4} ${curY + 2} Td (Type) Tj ET`);
-    ops.push(`BT /F2 7.5 Tf ${M + 90} ${curY + 2} Td (Resource) Tj ET`);
-    ops.push(`BT /F2 7.5 Tf ${M + 190} ${curY + 2} Td (DORA Article) Tj ET`);
-    ops.push(`BT /F2 7.5 Tf ${M + 370} ${curY + 2} Td (Details) Tj ET`);
-    curY -= 18;
+    ops.push(`BT /F2 7.5 Tf ${M + 6} ${curY + 1} Td (Type) Tj ET`);
+    ops.push(`BT /F2 7.5 Tf ${M + 92} ${curY + 1} Td (Resource) Tj ET`);
+    ops.push(`BT /F2 7.5 Tf ${M + 192} ${curY + 1} Td (DORA Article) Tj ET`);
+    ops.push(`BT /F2 7.5 Tf ${M + 372} ${curY + 1} Td (Details) Tj ET`);
+    curY -= 22;
 
     incRows.slice(0, 6).forEach((inc, idx) => {
+      const rowH = 17;
       const bg = idx % 2 === 0 ? "1 1 1" : "0.94 0.96 0.98";
       ops.push(`${bg} rg`);
-      ops.push(`${M} ${curY - 2} ${W - 2 * M} 15 re f`);
+      ops.push(`${M} ${curY - 4} ${W - 2 * M} ${rowH} re f`);
       ops.push(`0.12 0.16 0.23 rg`);
       const type = String(inc.type ?? "").replace(/_/g, " ").slice(0, 16);
-      const res  = String(inc.resource_name ?? inc.resource_id ?? "—").slice(0, 18);
-      const art  = String(inc.dora_article ?? "—").slice(0, 26);
+      const res  = String(inc.resource_name ?? inc.resource_id ?? "-").slice(0, 18);
+      const art  = String(inc.dora_article ?? "-").slice(0, 26);
       const det  = String(inc.details ?? "").slice(0, 30).replace(/[()\\]/g, "");
-      ops.push(`BT /F1 7.5 Tf ${M + 4} ${curY + 2} Td (${type}) Tj ET`);
-      ops.push(`BT /F1 7.5 Tf ${M + 90} ${curY + 2} Td (${res}) Tj ET`);
-      ops.push(`BT /F1 7.5 Tf ${M + 190} ${curY + 2} Td (${art}) Tj ET`);
-      ops.push(`BT /F1 7.5 Tf ${M + 370} ${curY + 2} Td (${det}) Tj ET`);
-      curY -= 16;
-    });
-    curY -= 4;
-
-    // ── DORA Articles ─────────────────────────────────────────────────────────
-    section("3  ·  Triggered DORA Articles");
-    payload.dora_articles.forEach((art, idx) => {
-      const bg = idx % 2 === 0 ? "0.91 0.94 1.00" : "1 1 1";
-      ops.push(`${bg} rg`);
-      ops.push(`${M} ${curY - 2} ${W - 2 * M} 14 re f`);
-      // Blue left bar
-      ops.push(`0.00 0.34 1.00 rg`);
-      ops.push(`${M} ${curY - 2} 3 14 re f`);
-      ops.push(`0.12 0.16 0.23 rg`);
-      ops.push(`BT /F1 8 Tf ${M + 10} ${curY + 2} Td (${art.replace(/[()\\]/g, "")}) Tj ET`);
-      curY -= 16;
+      ops.push(`BT /F1 7.5 Tf ${M + 6} ${curY + 1} Td (${type}) Tj ET`);
+      ops.push(`BT /F1 7.5 Tf ${M + 92} ${curY + 1} Td (${res}) Tj ET`);
+      ops.push(`BT /F1 7.5 Tf ${M + 192} ${curY + 1} Td (${art}) Tj ET`);
+      ops.push(`BT /F1 7.5 Tf ${M + 372} ${curY + 1} Td (${det}) Tj ET`);
+      curY -= rowH + 1;
     });
     curY -= 6;
 
-    // ── Attestation box ───────────────────────────────────────────────────────
-    if (curY > 120) {
-      section("4  ·  Attestation");
-      ops.push(`0.91 0.94 1.00 rg`);
-      ops.push(`${M} ${curY - 60} ${W - 2 * M} 70 re f`);
+    // ── DORA Articles ─────────────────────────────────────────────────────────
+    section("3. Triggered DORA Articles");
+    payload.dora_articles.forEach((art, idx) => {
+      const rowH = 17;
+      const bg = idx % 2 === 0 ? "0.91 0.94 1.00" : "1 1 1";
+      ops.push(`${bg} rg`);
+      ops.push(`${M} ${curY - 4} ${W - 2 * M} ${rowH} re f`);
+      // Blue left accent bar
       ops.push(`0.00 0.34 1.00 rg`);
-      ops.push(`${M} ${curY - 60} ${W - 2 * M} 70 re S`);
+      ops.push(`${M} ${curY - 4} 4 ${rowH} re f`);
       ops.push(`0.12 0.16 0.23 rg`);
-      ops.push(`BT /F1 8.5 Tf ${M + 12} ${curY - 6} Td (This evidence package was auto-generated by GradientGuard on DigitalOcean Gradient AI Platform.) Tj ET`);
-      ops.push(`BT /F1 8.5 Tf ${M + 12} ${curY - 20} Td (Provided for audit purposes under DORA Article 17 - ICT-related incident management.) Tj ET`);
+      const artClean = art.replace(/[()\\]/g, "").slice(0, 80);
+      ops.push(`BT /F1 8.5 Tf ${M + 12} ${curY + 1} Td (${artClean}) Tj ET`);
+      curY -= rowH + 2;
+    });
+    curY -= 10;
+
+    // ── Attestation box ───────────────────────────────────────────────────────
+    if (curY > 130) {
+      section("4. Attestation");
+      const boxH = 72;
+      ops.push(`0.91 0.94 1.00 rg`);
+      ops.push(`${M} ${curY - boxH + 12} ${W - 2 * M} ${boxH} re f`);
+      ops.push(`0.00 0.34 1.00 rg`);
+      ops.push(`${M} ${curY - boxH + 12} ${W - 2 * M} ${boxH} re S`);
+      ops.push(`0.12 0.16 0.23 rg`);
+      ops.push(`BT /F1 8.5 Tf ${M + 12} ${curY} Td (This evidence package was auto-generated by GradientGuard on DigitalOcean Gradient AI Platform.) Tj ET`);
+      ops.push(`BT /F1 8.5 Tf ${M + 12} ${curY - 16} Td (Provided for audit purposes under DORA Article 17 - ICT-related incident management.) Tj ET`);
       ops.push(`0.39 0.45 0.55 rg`);
-      ops.push(`BT /F1 7.5 Tf ${M + 12} ${curY - 34} Td (Digitally timestamped: ${now}) Tj ET`);
+      ops.push(`BT /F1 7.5 Tf ${M + 12} ${curY - 32} Td (Digitally timestamped: ${now}) Tj ET`);
     }
 
     // ── Footer ────────────────────────────────────────────────────────────────
