@@ -147,6 +147,57 @@ Notes:
 
 ---
 
+## Configuration
+
+Copy `.env.example` to `.env`. **Only `DATABASE_URL` is required to start the API**; everything else is optional until you deploy the agents, so the local demo works with just a database.
+
+For the bundled Docker database use:
+
+```
+DATABASE_URL=postgresql://doadmin:localdev@localhost:5432/gradientguard
+```
+
+| Variable | Needed for | Meaning |
+|---|---|---|
+| `DATABASE_URL` | always | PostgreSQL connection string (`docker-compose up -d` provides one locally; DigitalOcean Managed PostgreSQL in production) |
+| `API_PORT` | optional | API port. The code default is `3001`; the root `npm run dev` script uses `3101` (web on `3100`, override with `WEB_PORT`) |
+| `NEXT_PUBLIC_API_URL`, `NEXT_PUBLIC_APP_URL` | web app | Where the web app finds the API, and its own public URL |
+| `DIGITALOCEAN_API_TOKEN`, `DO_REGION` | deploying | DigitalOcean API token and region (`ams3` for EU data residency) |
+| `GRADIENT_MODEL_ACCESS_KEY` | live AI | Gradient serverless inference key |
+| `GRADIENT_AGENT_KEY_<NAME>`, `GRADIENT_AGENT_URL_<NAME>` | live AI | Endpoint and key for each deployed agent. `<NAME>` is `SENTINEL`, `EVIDENCE`, `REMEDIATION` or `COUNSEL`; set them after `./scripts/deploy-agents.sh` |
+| `GRADIENT_KB_DORA_ID`, `_NIS2_ID`, `_GDPR_ID`, `_MAS_ID`, `_INCIDENTS_ID` | live AI | Gradient knowledge base IDs, set after the knowledge bases are created |
+| `DO_SPACES_KEY`, `DO_SPACES_SECRET`, `DO_SPACES_ENDPOINT`, `DO_SPACES_BUCKET`, `DO_SPACES_CDN_ENDPOINT` | evidence storage | DigitalOcean Spaces for generated evidence packs |
+| `SLACK_WEBHOOK_URL` | optional | Slack notifications |
+
+Without the Compliance Counsel agent configured, the chat falls back to a local demo response.
+
+## Scripts
+
+| Command | What it does |
+|---|---|
+| `npm run dev` | Start API and web together (API `3101`, web `3100`) |
+| `npm run dev:api`, `npm run dev:web` | Start one of them |
+| `npm run build` | Build API and web |
+| `npm run db:push` | Push the Drizzle schema to the database |
+| `npm run demo:smoke` | Call `/health` and `POST /api/simulate` (creates a demo P1 incident) |
+| `bash scripts/check-health.sh` | Health check; set `API_URL` to check a deployed API |
+| `bash scripts/deploy-agents.sh` | Deploy the four agents to Gradient ADK |
+| `bash scripts/run-evals.sh` | Run the agent evaluations |
+
+CI (`.github/workflows`) type-checks and builds the API on every push.
+
+## Repository layout
+
+```
+packages/api/        Express and TypeScript API (Drizzle ORM, agent orchestration, /health, /api/simulate)
+packages/web/        Next.js dashboard
+packages/agents/     Python agents: dora_sentinel, evidence_forge, remediation_advisor, compliance_counsel
+knowledge-bases/     Seed scripts and source documents for the regulatory knowledge bases
+terraform/           Infrastructure as code
+scripts/             Deploy, health-check and evaluation scripts
+demo/                Demo notes
+```
+
 ## DORA Compliance Coverage
 
 | DORA Article | Coverage |
